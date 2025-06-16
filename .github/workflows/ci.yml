@@ -46,6 +46,12 @@ jobs:
           go-version: '1.22'
           cache: true
 
+      - name: Debug directory structure
+        run: |
+          pwd
+          ls -la
+          ls -la cmd/tt/
+
       - name: Build
         run: |
           GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -v -o tt ./cmd/tt/main.go
