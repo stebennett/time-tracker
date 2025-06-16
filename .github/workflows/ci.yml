@@ -47,6 +47,22 @@ jobs:
           go-version: '1.22'
           cache: true
 
+      - name: Install build dependencies
+        if: matrix.goos == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc libsqlite3-dev
+
+      - name: Install build dependencies
+        if: matrix.goos == 'darwin'
+        run: |
+          brew install sqlite3
+
+      - name: Install build dependencies
+        if: matrix.goos == 'windows'
+        run: |
+          choco install mingw sqlite
+
       - name: Debug directory structure
         run: |
           pwd
