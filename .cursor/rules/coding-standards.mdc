@@ -1,0 +1,50 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Coding Standards
+
+## Go Standards
+
+- Use Go 1.22+ features and idioms
+- Follow `gofmt`, `golint`, and `govet` guidelines
+- Use explicit error handling (no silent ignores)
+- Implement interfaces where appropriate
+- Use dependency injection for better testability
+- Keep functions small and focused
+- Use meaningful variable and function names
+- Document all exported functions and types
+
+## React Standards
+
+- Use functional components with hooks
+- Follow Material Design guidelines
+- Use TypeScript for type safety
+- Keep components small and focused
+- Use proper prop typing
+- Implement error boundaries
+- Use React Query for data fetching
+- Follow BEM naming convention for CSS
+
+## Testing Standards
+
+- Write unit tests for all business logic
+- Use table-driven tests in Go
+- Follow AAA (Arrange-Act-Assert) pattern
+- Mock external dependencies
+- Aim for high test coverage of critical paths
+- Use `testing` package for Go tests
+- Use Jest and React Testing Library for frontend tests
+
+## Security Standards
+
+- Never commit secrets or credentials
+- Use environment variables for configuration
+- Sanitize all user input
+- Implement proper authentication and authorization
+- Follow OWASP security guidelines
+- Use HTTPS for all communications
+- Implement rate limiting
+
+- Use prepared statements for database queries

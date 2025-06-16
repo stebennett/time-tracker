@@ -1,0 +1,38 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Deployment and Operations
+
+## Local Development
+
+- Use Docker and docker-compose for local development
+- SQLite is used for local database
+- Environment variables are managed through `.env` files
+- Hot reloading is enabled for both Go and React development
+
+## CI/CD Pipeline
+
+- GitHub Workflow pipelines handle CI/CD
+- Automated testing on pull requests
+- Automated deployment to staging
+- Manual approval required for production deployment
+
+## Deployment Architecture
+
+- Application runs on Ubuntu home server
+- Docker containers for all services
+- Nginx as reverse proxy
+- Let's Encrypt for SSL certificates
+- SQLite for data storage
+- Regular backups of database
+
+## Monitoring and Maintenance
+
+- Application logs are collected and monitored
+- Error tracking and alerting
+- Regular security updates
+- Automated database backups
+
+- Cron jobs for maintenance tasks
