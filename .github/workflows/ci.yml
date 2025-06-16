@@ -57,7 +57,7 @@ jobs:
         run: |
           GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -v -o tt ./cmd/tt/main.go
         env:
-          CGO_ENABLED: 0
+          CGO_ENABLED: 1
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
