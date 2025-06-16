@@ -13,6 +13,9 @@ import (
 	"time-tracker/internal/repository/sqlite"
 )
 
+// timeNow is a variable that can be replaced in tests
+var timeNow = time.Now
+
 // App represents the main CLI application
 type App struct {
 	repo sqlite.Repository
@@ -69,7 +72,12 @@ func (a *App) Run(args []string) error {
 	// Handle different commands
 	switch args[0] {
 	case "stop":
-		return a.stopRunningTasks()
+		if len(args) == 1 {
+			return a.stopRunningTasks()
+		}
+		// If there are additional arguments, treat as a new task
+		text := strings.Join(args, " ")
+		return a.createNewTask(text)
 	case "list":
 		return a.listTasks(args[1:])
 	case "current":
@@ -85,7 +93,7 @@ func (a *App) Run(args []string) error {
 
 // parseTimeShorthand parses time shorthand like "30m", "2h", "1d", etc.
 func parseTimeShorthand(shorthand string) (time.Duration, error) {
-	re := regexp.MustCompile(`^(\d+)([mhdwmo]|y)$`)
+	re := regexp.MustCompile(`^(\d+)(m|h|d|w|mo|y)$`)
 	matches := re.FindStringSubmatch(shorthand)
 	if matches == nil {
 		return 0, fmt.Errorf("invalid time format: %s", shorthand)
@@ -135,7 +143,7 @@ func (a *App) listTasks(args []string) error {
 	// Check if first argument is a time shorthand
 	if duration, err := parseTimeShorthand(args[0]); err == nil {
 		// Time shorthand found, set time range
-		now := time.Now()
+		now := timeNow()
 		startTime := now.Add(-duration)
 		opts.StartTime = &startTime
 		opts.EndTime = &now
@@ -203,7 +211,7 @@ func (a *App) stopRunningTasks() error {
 		return fmt.Errorf("failed to search for running tasks: %w", err)
 	}
 
-	now := time.Now()
+	now := timeNow()
 	for _, entry := range entries {
 		if entry.EndTime == nil {
 			entry.EndTime = &now
@@ -217,7 +225,7 @@ func (a *App) stopRunningTasks() error {
 	return nil
 }
 
-// createNewTask creates a new task and stops any running tasks
+// createNewTask creates a new task
 func (a *App) createNewTask(description string) error {
 	// First, stop any running tasks
 	if err := a.stopRunningTasks(); err != nil {
@@ -225,7 +233,7 @@ func (a *App) createNewTask(description string) error {
 	}
 
 	// Create new task
-	now := time.Now()
+	now := timeNow()
 	entry := &sqlite.TimeEntry{
 		StartTime:   now,
 		Description: description,
@@ -255,7 +263,7 @@ func (a *App) showCurrentTask() error {
 
 	// Get the most recent running task
 	entry := entries[0]
-	duration := time.Since(entry.StartTime)
+	duration := timeNow().Sub(entry.StartTime)
 	hours := int(duration.Hours())
 	minutes := int(duration.Minutes()) % 60
 

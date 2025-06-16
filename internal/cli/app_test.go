@@ -61,25 +61,25 @@ func TestApp_Run(t *testing.T) {
 		{
 			name:    "stop now is a new task",
 			args:    []string{"stop", "now"},
-			want:    "Started new task: stop now\n",
+			want:    "All running tasks have been stopped\nStarted new task: stop now\n",
 			wantErr: false,
 		},
 		{
 			name:    "stop working is a new task",
 			args:    []string{"stop", "working"},
-			want:    "Started new task: stop working\n",
+			want:    "All running tasks have been stopped\nStarted new task: stop working\n",
 			wantErr: false,
 		},
 		{
 			name:    "new task",
 			args:    []string{"Working on feature X"},
-			want:    "Started new task: Working on feature X\n",
+			want:    "All running tasks have been stopped\nStarted new task: Working on feature X\n",
 			wantErr: false,
 		},
 		{
 			name:    "multiple words task",
 			args:    []string{"Working", "on", "feature", "X"},
-			want:    "Started new task: Working on feature X\n",
+			want:    "All running tasks have been stopped\nStarted new task: Working on feature X\n",
 			wantErr: false,
 		},
 		{
@@ -231,21 +231,24 @@ func TestListTasks(t *testing.T) {
 	app, cleanup := setupTestApp(t)
 	defer cleanup()
 
+	// Create a fixed time for testing
+	fixedTime := time.Date(2025, 6, 16, 11, 22, 1, 0, time.UTC)
+	timeNow = func() time.Time { return fixedTime }
+
 	// Create some test entries
-	now := time.Now()
 	entries := []*sqlite.TimeEntry{
 		{
-			StartTime:   now.Add(-2 * time.Hour),
-			EndTime:     &now,
+			StartTime:   fixedTime.Add(-2 * time.Hour),
+			EndTime:     &fixedTime,
 			Description: "First task",
 		},
 		{
-			StartTime:   now.Add(-1 * time.Hour),
+			StartTime:   fixedTime.Add(-1 * time.Hour),
 			Description: "Second task",
 		},
 		{
-			StartTime:   now.Add(-30 * time.Minute),
-			EndTime:     &now,
+			StartTime:   fixedTime.Add(-30 * time.Minute),
+			EndTime:     &fixedTime,
 			Description: "Third task",
 		},
 	}
@@ -266,25 +269,30 @@ func TestListTasks(t *testing.T) {
 		{
 			name:    "list all",
 			args:    []string{},
-			want:    "3 tasks found\n",
+			want:    "2025-06-16 09:22:01 - 2025-06-16 11:22:01 (2h 0m): First task\n" +
+				"2025-06-16 10:22:01 - running: Second task\n" +
+				"2025-06-16 10:52:01 - 2025-06-16 11:22:01 (0h 30m): Third task\n",
 			wantErr: false,
 		},
 		{
 			name:    "list last hour",
 			args:    []string{"1h"},
-			want:    "2 tasks found\n",
+			want:    "2025-06-16 10:22:01 - running: Second task\n" +
+				"2025-06-16 10:52:01 - 2025-06-16 11:22:01 (0h 30m): Third task\n",
 			wantErr: false,
 		},
 		{
 			name:    "list with text filter",
 			args:    []string{"task"},
-			want:    "3 tasks found\n",
+			want:    "2025-06-16 09:22:01 - 2025-06-16 11:22:01 (2h 0m): First task\n" +
+				"2025-06-16 10:22:01 - running: Second task\n" +
+				"2025-06-16 10:52:01 - 2025-06-16 11:22:01 (0h 30m): Third task\n",
 			wantErr: false,
 		},
 		{
 			name:    "list with time and text filter",
 			args:    []string{"1h", "Second"},
-			want:    "1 task found\n",
+			want:    "2025-06-16 10:22:01 - running: Second task\n",
 			wantErr: false,
 		},
 	}

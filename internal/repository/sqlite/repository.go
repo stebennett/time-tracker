@@ -212,7 +212,7 @@ func (r *SQLiteRepository) SearchTimeEntries(opts SearchOptions) ([]*TimeEntry, 
 	if opts.StartTime != nil || opts.EndTime != nil {
 		timeCondition := "("
 		if opts.StartTime != nil {
-			timeCondition += "end_time IS NULL OR end_time >= ?"
+			timeCondition += "start_time >= ?"
 			args = append(args, *opts.StartTime)
 		}
 		if opts.StartTime != nil && opts.EndTime != nil {
@@ -224,8 +224,8 @@ func (r *SQLiteRepository) SearchTimeEntries(opts SearchOptions) ([]*TimeEntry, 
 		}
 		timeCondition += ")"
 		conditions = append(conditions, timeCondition)
-	} else {
-		// If no time range is specified, only return running tasks (end_time IS NULL)
+	} else if opts.Description == nil {
+		// Only filter for running tasks if no search criteria are provided
 		conditions = append(conditions, "end_time IS NULL")
 	}
 
