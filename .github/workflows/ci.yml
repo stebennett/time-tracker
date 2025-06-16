@@ -27,15 +27,13 @@ jobs:
       - name: Run tests
         run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
 
-  build:
-    name: Build
+  build-linux:
+    name: Build Linux
     needs: test
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        goos: [linux, darwin]
         goarch: [amd64, arm64]
-
     steps:
       - uses: actions/checkout@v4
 
@@ -46,33 +44,55 @@ jobs:
           cache: true
 
       - name: Install build dependencies
-        if: matrix.goos == 'linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc libsqlite3-dev
 
-      - name: Debug directory structure
-        run: |
-          pwd
-          ls -la
-          ls -la cmd/tt/
-
       - name: Build
         run: |
-          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -v -o tt ./cmd/tt/main.go
+          GOARCH=${{ matrix.goarch }} go build -v -o tt ./cmd/tt/main.go
         env:
           CGO_ENABLED: 1
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: tt-${{ matrix.goos }}-${{ matrix.goarch }}
+          name: tt-linux-${{ matrix.goarch }}
+          path: ./tt
+          if-no-files-found: error
+
+  build-darwin:
+    name: Build Darwin
+    needs: test
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        goarch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+
+      - name: Build
+        run: |
+          GOARCH=${{ matrix.goarch }} go build -v -o tt ./cmd/tt/main.go
+        env:
+          CGO_ENABLED: 1
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: tt-darwin-${{ matrix.goarch }}
           path: ./tt
           if-no-files-found: error
 
   release:
     name: Release
-    needs: build
+    needs: [build-linux, build-darwin]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
@@ -88,15 +108,9 @@ jobs:
       - name: Create release archive
         run: |
           cd artifacts
-          for os in linux darwin windows; do
+          for os in linux darwin; do
             for arch in amd64 arm64; do
-              if [ "$os" = "windows" ] && [ "$arch" = "arm64" ]; then
-                continue
-              fi
               binary="tt-$os-$arch/tt"
-              if [ "$os" = "windows" ]; then
-                binary="${binary}.exe"
-              fi
               if [ -f "$binary" ]; then
                 zip "tt-$os-$arch.zip" "$binary"
               fi
