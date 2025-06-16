@@ -239,6 +239,11 @@ func TestSearchTimeEntries(t *testing.T) {
 			},
 			expected: 0,
 		},
+		{
+			name:     "Search for running tasks",
+			opts:     SearchOptions{},
+			expected: 1, // Only the second entry has no end time
+		},
 	}
 
 	for _, tt := range tests {
@@ -250,6 +255,13 @@ func TestSearchTimeEntries(t *testing.T) {
 			// Verify ascending order
 			for i := 1; i < len(results); i++ {
 				assert.True(t, results[i-1].StartTime.Before(results[i].StartTime))
+			}
+
+			// For running tasks test, verify the result has no end time
+			if tt.name == "Search for running tasks" {
+				assert.Len(t, results, 1)
+				assert.Nil(t, results[0].EndTime)
+				assert.Equal(t, "Second meeting", results[0].Description)
 			}
 		})
 	}
