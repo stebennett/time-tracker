@@ -2,6 +2,7 @@ package sqlite
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -10,18 +11,23 @@ import (
 )
 
 func setupTestDB(t *testing.T) (*SQLiteRepository, func()) {
-	// Create a temporary file for the test database
-	tmpfile, err := os.CreateTemp("", "testdb-*.db")
-	require.NoError(t, err)
+	// Create data directory if it doesn't exist
+	dataDir := "./data"
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Set up test database path
+	dbPath := filepath.Join(dataDir, "tt.db")
 	
 	// Create repository instance
-	repo, err := New(tmpfile.Name())
+	repo, err := New(dbPath)
 	require.NoError(t, err)
 
 	// Return cleanup function
 	cleanup := func() {
 		repo.Close()
-		os.Remove(tmpfile.Name())
+		os.Remove(dbPath)
 	}
 
 	return repo, cleanup

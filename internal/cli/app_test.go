@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -12,16 +13,18 @@ import (
 )
 
 func setupTestApp(t *testing.T) (*App, func()) {
-	// Create a temporary file for the test database
-	tmpfile, err := os.CreateTemp("", "testdb-*.db")
-	if err != nil {
+	// Create data directory if it doesn't exist
+	dataDir := "./data"
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
 		t.Fatal(err)
 	}
 
+	// Set up test database path
+	dbPath := filepath.Join(dataDir, "tt.db")
+
 	// Create repository instance
-	repo, err := sqlite.New(tmpfile.Name())
+	repo, err := sqlite.New(dbPath)
 	if err != nil {
-		os.Remove(tmpfile.Name())
 		t.Fatal(err)
 	}
 
@@ -30,7 +33,7 @@ func setupTestApp(t *testing.T) (*App, func()) {
 	// Return cleanup function
 	cleanup := func() {
 		repo.Close()
-		os.Remove(tmpfile.Name())
+		os.Remove(dbPath)
 	}
 
 	return app, cleanup

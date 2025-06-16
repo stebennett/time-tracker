@@ -53,4 +53,7 @@ coverage.html
 
 # Temporary files
 tmp/
-temp/ 
+temp/
+
+# Data directory
+data/ 

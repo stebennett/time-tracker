@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -17,10 +18,39 @@ type App struct {
 	repo sqlite.Repository
 }
 
+// getDatabasePath returns the path to the SQLite database file
+func getDatabasePath() (string, error) {
+	// Check for TT_DB environment variable
+	if dbPath := os.Getenv("TT_DB"); dbPath != "" {
+		return dbPath, nil
+	}
+
+	// Get user's home directory
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to get user home directory: %w", err)
+	}
+
+	// Create .tt directory if it doesn't exist
+	ttDir := filepath.Join(homeDir, ".tt")
+	if err := os.MkdirAll(ttDir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create .tt directory: %w", err)
+	}
+
+	// Return path to tt.db in .tt directory
+	return filepath.Join(ttDir, "tt.db"), nil
+}
+
 // NewApp creates a new CLI application instance
 func NewApp() (*App, error) {
+	// Get database path
+	dbPath, err := getDatabasePath()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get database path: %w", err)
+	}
+
 	// Initialize SQLite repository
-	repo, err := sqlite.New("time-tracker.db")
+	repo, err := sqlite.New(dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize database: %w", err)
 	}
