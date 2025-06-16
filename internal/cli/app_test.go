@@ -2,7 +2,6 @@ package cli
 
 import (
 	"bytes"
-	"fmt"
 	"os"
 	"testing"
 )
