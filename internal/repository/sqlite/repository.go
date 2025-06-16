@@ -7,6 +7,7 @@ import (
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
+	"time-tracker/internal/repository/sqlite/migrations"
 )
 
 // SearchOptions contains all possible search parameters
@@ -48,10 +49,10 @@ func New(dbPath string) (*SQLiteRepository, error) {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
-	// Create the table if it doesn't exist
-	if err := createTable(db); err != nil {
+	// Run migrations
+	if err := migrations.RunMigrations(db); err != nil {
 		db.Close()
-		return nil, fmt.Errorf("failed to create table: %w", err)
+		return nil, fmt.Errorf("failed to run migrations: %w", err)
 	}
 
 	return &SQLiteRepository{db: db}, nil
@@ -279,18 +280,4 @@ func (r *SQLiteRepository) SearchTimeEntries(opts SearchOptions) ([]*TimeEntry, 
 	}
 
 	return entries, nil
-}
-
-// createTable creates the initial table structure
-func createTable(db *sql.DB) error {
-	query := `
-	CREATE TABLE IF NOT EXISTS time_entries (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		start_time DATETIME NOT NULL,
-		end_time DATETIME,
-		description TEXT
-	)`
-
-	_, err := db.Exec(query)
-	return err
 } 
