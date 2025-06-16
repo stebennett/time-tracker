@@ -48,7 +48,7 @@ jobs:
 
       - name: Build
         run: |
-          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -v ./cmd/tt
+          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -v -o tt ./cmd/tt/main.go
         env:
           CGO_ENABLED: 0
 

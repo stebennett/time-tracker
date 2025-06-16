@@ -17,8 +17,39 @@ time-tracker/
 
 ## Installation
 
+### Option 1: Using Go Install (Recommended for Developers)
 ```bash
 go install ./cmd/tt
+```
+
+### Option 2: Download Binary (Recommended for Users)
+1. Download the latest release binary for your operating system from the [releases page](https://github.com/stebennett/time-tracker/releases)
+2. Extract the binary to a location of your choice
+3. Add the binary location to your system PATH:
+   - Windows:
+     ```powershell
+     # Add to user PATH
+     $env:Path += ";C:\path\to\time-tracker"
+     # Or add permanently through System Properties > Environment Variables
+     ```
+   - Linux/macOS:
+     ```bash
+     # Add to your shell profile (.bashrc, .zshrc, etc.)
+     export PATH="$PATH:/path/to/time-tracker"
+     ```
+
+### Database Configuration
+The time tracker stores its data in a SQLite database. By default, it's located at:
+- Windows: `%USERPROFILE%\.tt\tt.db`
+- Linux/macOS: `~/.tt/tt.db`
+
+To use a custom database location, set the `TT_DB` environment variable:
+```bash
+# Windows
+set TT_DB=C:\custom\path\to\tt.db
+
+# Linux/macOS
+export TT_DB=/custom/path/to/tt.db
 ```
 
 ## Usage
@@ -81,4 +112,4 @@ This project is built using Go. To run the project locally:
 
 ## License
 
-MIT 
+MIT
