@@ -6,8 +6,9 @@ import (
 	"strings"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
 	"time-tracker/internal/repository/sqlite/migrations"
+
+	_ "modernc.org/sqlite"
 )
 
 // SearchOptions contains all possible search parameters
@@ -23,22 +24,22 @@ type Repository interface {
 	// Create operations
 	CreateTimeEntry(entry *TimeEntry) error
 	CreateTask(task *Task) error
-	
+
 	// Read operations
 	GetTimeEntry(id int64) (*TimeEntry, error)
 	ListTimeEntries() ([]*TimeEntry, error)
 	SearchTimeEntries(opts SearchOptions) ([]*TimeEntry, error)
 	GetTask(id int64) (*Task, error)
 	ListTasks() ([]*Task, error)
-	
+
 	// Update operations
 	UpdateTimeEntry(entry *TimeEntry) error
 	UpdateTask(task *Task) error
-	
+
 	// Delete operations
 	DeleteTimeEntry(id int64) error
 	DeleteTask(id int64) error
-	
+
 	// Utility
 	Close() error
 }
@@ -50,7 +51,7 @@ type SQLiteRepository struct {
 
 // New creates a new SQLite repository instance
 func New(dbPath string) (*SQLiteRepository, error) {
-	db, err := sql.Open("sqlite3", dbPath)
+	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
@@ -376,4 +377,4 @@ func (r *SQLiteRepository) SearchTimeEntries(opts SearchOptions) ([]*TimeEntry, 
 		return nil, fmt.Errorf("error iterating time entries: %w", err)
 	}
 	return entries, nil
-} 
+}

@@ -513,54 +513,94 @@ func (a *App) summaryTask(args []string) error {
 	}
 
 	// Find tasks that match the criteria
-	var opts sqlite.SearchOptions
+	var matchingTaskIDs []int64
+	
 	if startTime != nil {
-		opts.StartTime = startTime
-		opts.EndTime = &now
-	}
-	if searchText != "" {
-		opts.TaskName = &searchText
+		// If time filter is specified, find tasks that have ANY entries in the time window
+		timeFilterOpts := sqlite.SearchOptions{
+			StartTime: startTime,
+			EndTime:   &now,
+		}
+		if searchText != "" {
+			timeFilterOpts.TaskName = &searchText
+		}
+		
+		timeFilterEntries, err := a.repo.SearchTimeEntries(timeFilterOpts)
+		if err != nil {
+			return fmt.Errorf("failed to search time entries: %w", err)
+		}
+		
+		// Get unique task IDs from entries in the time window
+		taskIDSet := make(map[int64]bool)
+		for _, entry := range timeFilterEntries {
+			taskIDSet[entry.TaskID] = true
+		}
+		
+		// Convert to slice
+		for taskID := range taskIDSet {
+			matchingTaskIDs = append(matchingTaskIDs, taskID)
+		}
+	} else if searchText != "" {
+		// Only text filter, find tasks by name
+		textFilterOpts := sqlite.SearchOptions{
+			TaskName: &searchText,
+		}
+		
+		textFilterEntries, err := a.repo.SearchTimeEntries(textFilterOpts)
+		if err != nil {
+			return fmt.Errorf("failed to search time entries: %w", err)
+		}
+		
+		// Get unique task IDs
+		taskIDSet := make(map[int64]bool)
+		for _, entry := range textFilterEntries {
+			taskIDSet[entry.TaskID] = true
+		}
+		
+		// Convert to slice
+		for taskID := range taskIDSet {
+			matchingTaskIDs = append(matchingTaskIDs, taskID)
+		}
+	} else {
+		// No filters, get all tasks
+		allEntries, err := a.repo.ListTimeEntries()
+		if err != nil {
+			return fmt.Errorf("failed to list time entries: %w", err)
+		}
+		
+		// Get unique task IDs
+		taskIDSet := make(map[int64]bool)
+		for _, entry := range allEntries {
+			taskIDSet[entry.TaskID] = true
+		}
+		
+		// Convert to slice
+		for taskID := range taskIDSet {
+			matchingTaskIDs = append(matchingTaskIDs, taskID)
+		}
 	}
 
-	entries, err := a.repo.SearchTimeEntries(opts)
-	if err != nil {
-		return fmt.Errorf("failed to search time entries: %w", err)
-	}
-
-	if len(entries) == 0 {
+	if len(matchingTaskIDs) == 0 {
 		fmt.Println("No tasks found matching the criteria.")
 		return nil
 	}
 
-	// Group by task to show unique tasks
-	taskMap := make(map[int64]*sqlite.TimeEntry)
-	for _, entry := range entries {
-		if _, ok := taskMap[entry.TaskID]; !ok {
-			taskMap[entry.TaskID] = entry
-		}
-	}
-
-	// Build a slice for display
-	var taskIDs []int64
-	for id := range taskMap {
-		taskIDs = append(taskIDs, id)
-	}
-	// Sort by task name for consistent ordering
-	sort.Slice(taskIDs, func(i, j int) bool {
-		taskI, _ := a.repo.GetTask(taskIDs[i])
-		taskJ, _ := a.repo.GetTask(taskIDs[j])
+	// Sort task IDs by task name for consistent ordering
+	sort.Slice(matchingTaskIDs, func(i, j int) bool {
+		taskI, _ := a.repo.GetTask(matchingTaskIDs[i])
+		taskJ, _ := a.repo.GetTask(matchingTaskIDs[j])
 		return taskI.TaskName < taskJ.TaskName
 	})
 
 	// If only one task, show its summary directly
-	if len(taskIDs) == 1 {
-		return a.showTaskSummary(taskIDs[0])
+	if len(matchingTaskIDs) == 1 {
+		return a.showTaskSummary(matchingTaskIDs[0])
 	}
 
 	// Multiple tasks found, let user choose
 	fmt.Println("Select a task to summarize:")
-	for i, id := range taskIDs {
-		task, _ := a.repo.GetTask(id)
+	for i, taskID := range matchingTaskIDs {
+		task, _ := a.repo.GetTask(taskID)
 		fmt.Printf("%d. %s\n", i+1, task.TaskName)
 	}
 	fmt.Print("Enter number to summarize, or 'q' to quit: ")
@@ -573,10 +613,10 @@ func (a *App) summaryTask(args []string) error {
 		return nil
 	}
 	idx, err := strconv.Atoi(input)
-	if err != nil || idx < 1 || idx > len(taskIDs) {
+	if err != nil || idx < 1 || idx > len(matchingTaskIDs) {
 		return fmt.Errorf("invalid selection")
 	}
-	selectedTaskID := taskIDs[idx-1]
+	selectedTaskID := matchingTaskIDs[idx-1]
 
 	return a.showTaskSummary(selectedTaskID)
 }

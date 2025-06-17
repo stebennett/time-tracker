@@ -794,23 +794,23 @@ func dynamicUnderline(taskName string) string {
 
 func TestSummaryFeature(t *testing.T) {
 	tests := []struct {
-		name     string
-		args     []string
-		input    string
-		setup    func(app *App)
-		want     func() string
-		wantErr  bool
+		name    string
+		args    []string
+		input   string
+		setup   func(app *App)
+		want    func() string
+		wantErr bool
 	}{
 		{
-			name:  "summary with no tasks",
-			args:  []string{"summary"},
-			setup: func(app *App) {},
-			want: func() string { return "No tasks found matching the criteria.\n" },
+			name:    "summary with no tasks",
+			args:    []string{"summary"},
+			setup:   func(app *App) {},
+			want:    func() string { return "No tasks found matching the criteria.\n" },
 			wantErr: false,
 		},
 		{
-			name:  "summary with single task - direct display",
-			args:  []string{"summary", "coding"},
+			name: "summary with single task - direct display",
+			args: []string{"summary", "coding"},
 			setup: func(app *App) {
 				repo := app.repo
 				task := &sqlite.Task{TaskName: "coding project"}
@@ -872,30 +872,26 @@ func TestSummaryFeature(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:  "summary with time filter",
-			args:  []string{"summary", "2h", "coding"},
+			name: "summary with time filter",
+			args: []string{"summary", "2h", "coding"},
 			setup: func(app *App) {
-				// Use a fixed time for both the test and the code under test
-				fixedNow := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
-				timeNow = func() time.Time { return fixedNow }
-				// Restore timeNow after the test
-				defer func() { timeNow = time.Now }()
-				// Create a task
+				timeNow = func() time.Time { return time.Now() }
 				repo := app.repo
 				task := &sqlite.Task{TaskName: "coding project"}
 				repo.CreateTask(task)
-				// Create recent time entry (within 2h)
-				start := fixedNow.Add(-1 * time.Hour)
-				end := fixedNow.Add(-30 * time.Minute)
+				start := timeNow().Add(-1 * time.Hour)
+				end := timeNow().Add(-30 * time.Minute)
 				entry := &sqlite.TimeEntry{TaskID: task.ID, StartTime: start, EndTime: &end}
 				repo.CreateTimeEntry(entry)
 			},
-			want: func() string { return "Summary for: coding project\n======================\nStart Time           End Time             Duration        Status\n---------------------------------------------------------------------------\n"; },
+			want: func() string {
+				return "Summary for: coding project\n======================\nStart Time           End Time             Duration        Status\n---------------------------------------------------------------------------\n"
+			},
 			wantErr: false,
 		},
 		{
-			name:  "summary with running session",
-			args:  []string{"summary", "running"},
+			name: "summary with running session",
+			args: []string{"summary", "running"},
 			setup: func(app *App) {
 				// Create a task
 				repo := app.repo
@@ -906,7 +902,9 @@ func TestSummaryFeature(t *testing.T) {
 				entry := &sqlite.TimeEntry{TaskID: task.ID, StartTime: start, EndTime: nil}
 				repo.CreateTimeEntry(entry)
 			},
-			want: func() string { return "Summary for: running task\n=====================\nStart Time           End Time             Duration        Status\n---------------------------------------------------------------------------\n"; },
+			want: func() string {
+				return "Summary for: running task\n=====================\nStart Time           End Time             Duration        Status\n---------------------------------------------------------------------------\n"
+			},
 			wantErr: false,
 		},
 		{
@@ -929,6 +927,54 @@ func TestSummaryFeature(t *testing.T) {
 			},
 			want: func() string {
 				return "Select a task to summarize:\n1. project A\n2. project B\nEnter number to summarize, or 'q' to quit: Summary cancelled.\n"
+			},
+			wantErr: false,
+		},
+		{
+			name:  "summary with time filter shows all entries for matching task",
+			args:  []string{"summary", "2h", "coding"},
+			input: "1\n",
+			setup: func(app *App) {
+				// Create a task with entries both inside and outside the 2h window
+				repo := app.repo
+				task := &sqlite.Task{TaskName: "coding project"}
+				repo.CreateTask(task)
+
+				// Use fixed time for deterministic test
+				baseTime := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
+				timeNow = func() time.Time { return baseTime }
+
+				// Entry within the 2h window (1 hour ago)
+				start1 := baseTime.Add(-1 * time.Hour)
+				end1 := baseTime.Add(-30 * time.Minute)
+				entry1 := &sqlite.TimeEntry{TaskID: task.ID, StartTime: start1, EndTime: &end1}
+				repo.CreateTimeEntry(entry1)
+
+				// Entry outside the 2h window (3 hours ago)
+				start2 := baseTime.Add(-3 * time.Hour)
+				end2 := baseTime.Add(-2 * time.Hour)
+				entry2 := &sqlite.TimeEntry{TaskID: task.ID, StartTime: start2, EndTime: &end2}
+				repo.CreateTimeEntry(entry2)
+
+				// Entry outside the 2h window (5 hours ago)
+				start3 := baseTime.Add(-5 * time.Hour)
+				end3 := baseTime.Add(-4 * time.Hour)
+				entry3 := &sqlite.TimeEntry{TaskID: task.ID, StartTime: start3, EndTime: &end3}
+				repo.CreateTimeEntry(entry3)
+			},
+			want: func() string {
+				taskName := "coding project"
+				prompt := "Select a task to summarize:\n1. coding project\nEnter number to summarize, or 'q' to quit: "
+				return prompt + "\nSummary for: " + taskName + "\n" + dynamicUnderline(taskName) + "\n" +
+					"Start Time           End Time             Duration        Status\n" +
+					"---------------------------------------------------------------------------\n" +
+					"2024-01-01 07:00:00  2024-01-01 08:00:00  1h 0m           Completed\n" +
+					"2024-01-01 09:00:00  2024-01-01 10:00:00  1h 0m           Completed\n" +
+					"2024-01-01 11:00:00  2024-01-01 11:30:00  0h 30m           Completed\n" +
+					"---------------------------------------------------------------------------\n" +
+					"Total Sessions: 3\n" +
+					"Time Range: 2024-01-01 07:00:00 to 2024-01-01 11:30:00\n" +
+					"Total Time: 2h 30m\n"
 			},
 			wantErr: false,
 		},
@@ -989,24 +1035,24 @@ func TestShowTaskSummary(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name:   "task not found",
-			taskID: 999,
-			setup:  func(app *App) {},
-			want:   func() string { return "" },
+			name:    "task not found",
+			taskID:  999,
+			setup:   func(app *App) {},
+			want:    func() string { return "" },
 			wantErr: true,
 		},
 		{
-			name:  "task with no time entries",
+			name:   "task with no time entries",
 			taskID: 1,
 			setup: func(app *App) {
 				task := &sqlite.Task{ID: 1, TaskName: "test task"}
 				app.repo.CreateTask(task)
 			},
-			want:   func() string { return "" },
+			want:    func() string { return "" },
 			wantErr: true,
 		},
 		{
-			name:  "task with completed sessions",
+			name:   "task with completed sessions",
 			taskID: 1,
 			setup: func(app *App) {
 				task := &sqlite.Task{ID: 1, TaskName: "test task"}

@@ -98,6 +98,7 @@ The summary command provides detailed information about time entries for a speci
 - Displays summary statistics including total sessions, time range, and total time
 - Handles running sessions by showing current elapsed time
 - Supports task selection when multiple tasks match the criteria
+- **Time filters work by task**: When a time period is specified, the summary shows ALL entries for any task that had at least one entry within that time window
 
 Example summary output:
 ```
@@ -113,6 +114,13 @@ Total Sessions: 3 (1 running)
 Time Range: 2024-01-01 09:00:00 to 2024-01-01 19:30:00
 Total Time: 5h 30m
 ```
+
+**Time Filter Behavior**: When you use a time filter (e.g., `tt summary 2h "coding"`), the command will:
+1. Find all tasks that have at least one time entry within the specified time window
+2. Show you a list of those tasks to choose from
+3. When you select a task, display ALL time entries for that task (not just the ones within the time window)
+
+This allows you to see the complete history of a task while using time filters to narrow down which tasks to consider.
 
 ## CSV Export Format
 

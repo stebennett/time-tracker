@@ -43,26 +43,9 @@ jobs:
           go-version: '1.22'
           cache: true
 
-      - name: Install build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc libsqlite3-dev
-          if [ "${{ matrix.goarch }}" = "arm64" ]; then
-            sudo apt-get install -y gcc-aarch64-linux-gnu
-            export CC=aarch64-linux-gnu-gcc
-            export CGO_ENABLED=1
-            export GOARCH=arm64
-            export CGO_CCFLAGS="-I/usr/include"
-            export CGO_LDFLAGS="-L/usr/lib/aarch64-linux-gnu"
-          else
-            export CC=gcc
-            export CGO_ENABLED=1
-            export GOARCH=amd64
-          fi
-
       - name: Build
         run: |
-          go build -v -o tt ./cmd/tt/main.go
+          GOARCH=${{ matrix.goarch }} go build -v -o tt ./cmd/tt/main.go
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -90,8 +73,6 @@ jobs:
       - name: Build
         run: |
           GOARCH=${{ matrix.goarch }} go build -v -o tt ./cmd/tt/main.go
-        env:
-          CGO_ENABLED: 1
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
