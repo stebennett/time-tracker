@@ -28,7 +28,8 @@ func setupTestApp(t *testing.T) (*App, func()) {
 		t.Fatal(err)
 	}
 
-	app := &App{repo: repo}
+	// Create app with injected repository using dependency injection
+	app := NewApp(repo)
 
 	// Return cleanup function
 	cleanup := func() {
@@ -37,6 +38,17 @@ func setupTestApp(t *testing.T) (*App, func()) {
 	}
 
 	return app, cleanup
+}
+
+// setupTestAppWithMock creates an app with a mock repository for testing
+func setupTestAppWithMock(t *testing.T) (*App, *MockRepository) {
+	// Create a mock repository
+	mockRepo := NewMockRepository()
+	
+	// Create app with injected mock repository
+	app := NewApp(mockRepo)
+	
+	return app, mockRepo
 }
 
 func TestApp_Run(t *testing.T) {
@@ -330,19 +342,6 @@ func TestListTasks(t *testing.T) {
 				t.Errorf("listTasks() output = %v, want %v", got, tt.want)
 			}
 		})
-	}
-}
-
-func TestNewApp(t *testing.T) {
-	app, err := NewApp()
-	if err != nil {
-		t.Errorf("NewApp() error = %v", err)
-	}
-	if app == nil {
-		t.Error("NewApp() returned nil")
-	}
-	if app.repo == nil {
-		t.Error("NewApp() repository is nil")
 	}
 }
 
@@ -697,4 +696,240 @@ func TestResumeFeature_Acceptance(t *testing.T) {
 	if !strings.Contains(output, "Resume cancelled.") {
 		t.Errorf("expected cancel message, got: %s", output)
 	}
-} 
+}
+
+// MockRepository implements the Repository interface for testing
+type MockRepository struct {
+	timeEntries []*sqlite.TimeEntry
+	tasks       []*sqlite.Task
+	nextID      int64
+}
+
+func NewMockRepository() *MockRepository {
+	return &MockRepository{
+		timeEntries: make([]*sqlite.TimeEntry, 0),
+		tasks:       make([]*sqlite.Task, 0),
+		nextID:      1,
+	}
+}
+
+func (m *MockRepository) CreateTimeEntry(entry *sqlite.TimeEntry) error {
+	entry.ID = m.nextID
+	m.nextID++
+	m.timeEntries = append(m.timeEntries, entry)
+	return nil
+}
+
+func (m *MockRepository) CreateTask(task *sqlite.Task) error {
+	task.ID = m.nextID
+	m.nextID++
+	m.tasks = append(m.tasks, task)
+	return nil
+}
+
+func (m *MockRepository) GetTimeEntry(id int64) (*sqlite.TimeEntry, error) {
+	for _, entry := range m.timeEntries {
+		if entry.ID == id {
+			return entry, nil
+		}
+	}
+	return nil, nil
+}
+
+func (m *MockRepository) ListTimeEntries() ([]*sqlite.TimeEntry, error) {
+	return m.timeEntries, nil
+}
+
+func (m *MockRepository) SearchTimeEntries(opts sqlite.SearchOptions) ([]*sqlite.TimeEntry, error) {
+	// Simple implementation for testing
+	return m.timeEntries, nil
+}
+
+func (m *MockRepository) GetTask(id int64) (*sqlite.Task, error) {
+	for _, task := range m.tasks {
+		if task.ID == id {
+			return task, nil
+		}
+	}
+	return nil, nil
+}
+
+func (m *MockRepository) ListTasks() ([]*sqlite.Task, error) {
+	return m.tasks, nil
+}
+
+func (m *MockRepository) UpdateTimeEntry(entry *sqlite.TimeEntry) error {
+	for i, existing := range m.timeEntries {
+		if existing.ID == entry.ID {
+			m.timeEntries[i] = entry
+			return nil
+		}
+	}
+	return nil
+}
+
+func (m *MockRepository) UpdateTask(task *sqlite.Task) error {
+	for i, existing := range m.tasks {
+		if existing.ID == task.ID {
+			m.tasks[i] = task
+			return nil
+		}
+	}
+	return nil
+}
+
+func (m *MockRepository) DeleteTimeEntry(id int64) error {
+	for i, entry := range m.timeEntries {
+		if entry.ID == id {
+			m.timeEntries = append(m.timeEntries[:i], m.timeEntries[i+1:]...)
+			return nil
+		}
+	}
+	return nil
+}
+
+func (m *MockRepository) DeleteTask(id int64) error {
+	for i, task := range m.tasks {
+		if task.ID == id {
+			m.tasks = append(m.tasks[:i], m.tasks[i+1:]...)
+			return nil
+		}
+	}
+	return nil
+}
+
+func (m *MockRepository) Close() error {
+	return nil
+}
+
+// TestAppWithDependencyInjection demonstrates using dependency injection with a mock repository
+func TestAppWithDependencyInjection(t *testing.T) {
+	// Create a mock repository
+	mockRepo := NewMockRepository()
+	
+	// Create app with injected mock repository using dependency injection
+	app := NewApp(mockRepo)
+	
+	// Verify the app was created
+	if app == nil {
+		t.Fatal("Expected app to be created, got nil")
+	}
+	
+	// Verify the repository was injected
+	if app.repo == nil {
+		t.Fatal("Expected repository to be injected, got nil")
+	}
+	
+	// Test that we can use the app with the mock repository
+	taskName := "Test Task with DI"
+	err := app.createNewTask(taskName)
+	if err != nil {
+		t.Fatalf("Expected no error creating task, got: %v", err)
+	}
+	
+	// Verify the task was created in the mock repository
+	tasks, err := mockRepo.ListTasks()
+	if err != nil {
+		t.Fatalf("Expected no error listing tasks, got: %v", err)
+	}
+	
+	if len(tasks) != 1 {
+		t.Fatalf("Expected 1 task, got %d", len(tasks))
+	}
+	
+	if tasks[0].TaskName != taskName {
+		t.Fatalf("Expected task name '%s', got '%s'", taskName, tasks[0].TaskName)
+	}
+}
+
+// TestAppWithMockRepository tests that the app works with a mock repository
+func TestAppWithMockRepository(t *testing.T) {
+	// Create a mock repository
+	mockRepo := NewMockRepository()
+	
+	// Create app with injected mock repository
+	app := NewApp(mockRepo)
+	
+	// Test creating a task
+	taskName := "Test Task"
+	err := app.createNewTask(taskName)
+	if err != nil {
+		t.Fatalf("Expected no error creating task, got: %v", err)
+	}
+	
+	// Verify the task was created in the mock repository
+	tasks, err := mockRepo.ListTasks()
+	if err != nil {
+		t.Fatalf("Expected no error listing tasks, got: %v", err)
+	}
+	
+	if len(tasks) != 1 {
+		t.Fatalf("Expected 1 task, got %d", len(tasks))
+	}
+	
+	if tasks[0].TaskName != taskName {
+		t.Fatalf("Expected task name '%s', got '%s'", taskName, tasks[0].TaskName)
+	}
+}
+
+// TestAppWithMockRepositoryListTasks tests listing tasks with mock repository
+func TestAppWithMockRepositoryListTasks(t *testing.T) {
+	// Create a mock repository
+	mockRepo := NewMockRepository()
+	
+	// Pre-populate with some test data
+	testTask := &sqlite.Task{
+		TaskName: "Test Task",
+	}
+	mockRepo.CreateTask(testTask)
+	
+	// Create app with injected mock repository
+	app := NewApp(mockRepo)
+	
+	// Test listing tasks
+	err := app.listTasks([]string{})
+	if err != nil {
+		t.Fatalf("Expected no error listing tasks, got: %v", err)
+	}
+}
+
+// TestAppWithMockRepositoryHelper demonstrates using the setupTestAppWithMock helper
+func TestAppWithMockRepositoryHelper(t *testing.T) {
+	// Use the helper function to create app with mock repository
+	app, mockRepo := setupTestAppWithMock(t)
+	
+	// Verify both app and mock repository were created
+	if app == nil {
+		t.Fatal("Expected app to be created, got nil")
+	}
+	
+	if mockRepo == nil {
+		t.Fatal("Expected mock repository to be created, got nil")
+	}
+	
+	// Test creating multiple tasks
+	taskNames := []string{"Task 1", "Task 2", "Task 3"}
+	for _, taskName := range taskNames {
+		err := app.createNewTask(taskName)
+		if err != nil {
+			t.Fatalf("Expected no error creating task '%s', got: %v", taskName, err)
+		}
+	}
+	
+	// Verify all tasks were created in the mock repository
+	tasks, err := mockRepo.ListTasks()
+	if err != nil {
+		t.Fatalf("Expected no error listing tasks, got: %v", err)
+	}
+	
+	if len(tasks) != len(taskNames) {
+		t.Fatalf("Expected %d tasks, got %d", len(taskNames), len(tasks))
+	}
+	
+	// Verify task names match
+	for i, task := range tasks {
+		if task.TaskName != taskNames[i] {
+			t.Fatalf("Expected task name '%s', got '%s'", taskNames[i], task.TaskName)
+		}
+	}
+}

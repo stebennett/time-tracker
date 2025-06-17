@@ -22,8 +22,8 @@ type App struct {
 	repo sqlite.Repository
 }
 
-// getDatabasePath returns the path to the SQLite database file
-func getDatabasePath() (string, error) {
+// GetDatabasePath returns the path to the SQLite database file
+func GetDatabasePath() (string, error) {
 	// Check for TT_DB environment variable
 	if dbPath := os.Getenv("TT_DB"); dbPath != "" {
 		return dbPath, nil
@@ -45,10 +45,18 @@ func getDatabasePath() (string, error) {
 	return filepath.Join(ttDir, "tt.db"), nil
 }
 
-// NewApp creates a new CLI application instance
-func NewApp() (*App, error) {
+// NewApp creates a new CLI application instance with dependency injection
+func NewApp(repo sqlite.Repository) *App {
+	return &App{
+		repo: repo,
+	}
+}
+
+// NewAppWithDefaultRepository creates a new CLI application instance with the default SQLite repository
+// This maintains backward compatibility and is used for production
+func NewAppWithDefaultRepository() (*App, error) {
 	// Get database path
-	dbPath, err := getDatabasePath()
+	dbPath, err := GetDatabasePath()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get database path: %w", err)
 	}
