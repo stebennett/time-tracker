@@ -81,9 +81,37 @@ jobs:
           path: ./tt
           if-no-files-found: error
 
+  build-windows:
+    name: Build Windows
+    needs: test
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        goarch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+
+      - name: Build
+        run: |
+          $env:GOARCH="${{ matrix.goarch }}"
+          go build -v -o tt.exe ./cmd/tt/main.go
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: tt-windows-${{ matrix.goarch }}
+          path: ./tt.exe
+          if-no-files-found: error
+
   release:
     name: Release
-    needs: [build-linux, build-darwin]
+    needs: [build-linux, build-darwin, build-windows]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
@@ -99,7 +127,7 @@ jobs:
       - name: Create release archive
         run: |
           cd artifacts
-          for os in linux darwin; do
+          for os in linux darwin windows; do
             for arch in amd64 arm64; do
               binary="tt-$os-$arch/tt"
               if [ -f "$binary" ]; then
