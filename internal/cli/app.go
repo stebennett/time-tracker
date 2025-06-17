@@ -75,7 +75,7 @@ func NewAppWithDefaultRepository() (*App, error) {
 // Run executes the CLI application with the given arguments
 func (a *App) Run(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: tt \"your text here\" or tt stop or tt list [time] [text] or tt current or tt output format=csv")
+		return fmt.Errorf("usage: tt \"your text here\" or tt stop or tt list [time] [text] or tt current or tt output format=csv or tt summary [time] [text] or tt resume")
 	}
 
 	// Handle different commands
@@ -95,6 +95,8 @@ func (a *App) Run(args []string) error {
 		return a.outputTasks(args[1:])
 	case "resume":
 		return a.resumeTask(args[1:])
+	case "summary":
+		return a.summaryTask(args[1:])
 	default:
 		// Otherwise, treat as a new task
 		text := strings.Join(args, " ")
@@ -483,5 +485,212 @@ func (a *App) resumeTask(args []string) error {
 	}
 	task, _ := a.repo.GetTask(selectedTaskID)
 	fmt.Printf("Resumed task: %s\n", task.TaskName)
+	return nil
+}
+
+// summaryTask implements the summary command
+func (a *App) summaryTask(args []string) error {
+	// Determine time range and search text
+	var startTime *time.Time
+	var searchText string
+	now := timeNow()
+	
+	if len(args) > 0 {
+		// Check if first argument is a time shorthand
+		if duration, err := parseTimeShorthand(args[0]); err == nil {
+			// Time shorthand found, set time range
+			start := now.Add(-duration)
+			startTime = &start
+			
+			// If there are more arguments, use them as search text
+			if len(args) > 1 {
+				searchText = strings.Join(args[1:], " ")
+			}
+		} else {
+			// No time shorthand, treat all arguments as search text
+			searchText = strings.Join(args, " ")
+		}
+	}
+
+	// Find tasks that match the criteria
+	var opts sqlite.SearchOptions
+	if startTime != nil {
+		opts.StartTime = startTime
+		opts.EndTime = &now
+	}
+	if searchText != "" {
+		opts.TaskName = &searchText
+	}
+
+	entries, err := a.repo.SearchTimeEntries(opts)
+	if err != nil {
+		return fmt.Errorf("failed to search time entries: %w", err)
+	}
+
+	if len(entries) == 0 {
+		fmt.Println("No tasks found matching the criteria.")
+		return nil
+	}
+
+	// Group by task to show unique tasks
+	taskMap := make(map[int64]*sqlite.TimeEntry)
+	for _, entry := range entries {
+		if _, ok := taskMap[entry.TaskID]; !ok {
+			taskMap[entry.TaskID] = entry
+		}
+	}
+
+	// Build a slice for display
+	var taskIDs []int64
+	for id := range taskMap {
+		taskIDs = append(taskIDs, id)
+	}
+	// Sort by task name for consistent ordering
+	sort.Slice(taskIDs, func(i, j int) bool {
+		taskI, _ := a.repo.GetTask(taskIDs[i])
+		taskJ, _ := a.repo.GetTask(taskIDs[j])
+		return taskI.TaskName < taskJ.TaskName
+	})
+
+	// If only one task, show its summary directly
+	if len(taskIDs) == 1 {
+		return a.showTaskSummary(taskIDs[0])
+	}
+
+	// Multiple tasks found, let user choose
+	fmt.Println("Select a task to summarize:")
+	for i, id := range taskIDs {
+		task, _ := a.repo.GetTask(id)
+		fmt.Printf("%d. %s\n", i+1, task.TaskName)
+	}
+	fmt.Print("Enter number to summarize, or 'q' to quit: ")
+
+	// Read user input
+	var input string
+	fmt.Fscanln(os.Stdin, &input)
+	if input == "q" || input == "Q" {
+		fmt.Println("Summary cancelled.")
+		return nil
+	}
+	idx, err := strconv.Atoi(input)
+	if err != nil || idx < 1 || idx > len(taskIDs) {
+		return fmt.Errorf("invalid selection")
+	}
+	selectedTaskID := taskIDs[idx-1]
+
+	return a.showTaskSummary(selectedTaskID)
+}
+
+// showTaskSummary displays a detailed summary for a specific task
+func (a *App) showTaskSummary(taskID int64) error {
+	// Get task details
+	task, err := a.repo.GetTask(taskID)
+	if err != nil {
+		return fmt.Errorf("failed to get task: %w", err)
+	}
+
+	// Get all time entries for this task
+	opts := sqlite.SearchOptions{TaskID: &taskID}
+	entries, err := a.repo.SearchTimeEntries(opts)
+	if err != nil {
+		return fmt.Errorf("failed to get time entries: %w", err)
+	}
+
+	if len(entries) == 0 {
+		return fmt.Errorf("no time entries found for task")
+	}
+
+	// Sort entries by start time
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].StartTime.Before(entries[j].StartTime)
+	})
+
+	// Calculate summary statistics
+	var earliestStart time.Time
+	var latestEnd time.Time
+	var totalDuration time.Duration
+	var runningSessions int
+
+	earliestStart = entries[0].StartTime
+	latestEnd = entries[0].StartTime // Initialize with first start time
+
+	for _, entry := range entries {
+		// Update earliest start
+		if entry.StartTime.Before(earliestStart) {
+			earliestStart = entry.StartTime
+		}
+
+		// Calculate duration and update latest end
+		if entry.EndTime != nil {
+			duration := entry.EndTime.Sub(entry.StartTime)
+			totalDuration += duration
+			
+			if entry.EndTime.After(latestEnd) {
+				latestEnd = *entry.EndTime
+			}
+		} else {
+			// Running session
+			runningSessions++
+			currentDuration := timeNow().Sub(entry.StartTime)
+			totalDuration += currentDuration
+			
+			// For running sessions, use current time as latest
+			if timeNow().After(latestEnd) {
+				latestEnd = timeNow()
+			}
+		}
+	}
+
+	// Print summary header
+	fmt.Printf("\nSummary for: %s\n", task.TaskName)
+	fmt.Println(strings.Repeat("=", len(task.TaskName)+12))
+
+	// Print table header
+	fmt.Printf("%-20s %-20s %-15s %s\n", "Start Time", "End Time", "Duration", "Status")
+	fmt.Println(strings.Repeat("-", 75))
+
+	// Print each session
+	for _, entry := range entries {
+		startStr := entry.StartTime.Format("2006-01-02 15:04:05")
+		var endStr, durationStr, status string
+		
+		if entry.EndTime != nil {
+			endStr = entry.EndTime.Format("2006-01-02 15:04:05")
+			duration := entry.EndTime.Sub(entry.StartTime)
+			hours := int(duration.Hours())
+			minutes := int(duration.Minutes()) % 60
+			durationStr = fmt.Sprintf("%dh %dm", hours, minutes)
+			status = "Completed"
+		} else {
+			endStr = "running"
+			duration := timeNow().Sub(entry.StartTime)
+			hours := int(duration.Hours())
+			minutes := int(duration.Minutes()) % 60
+			durationStr = fmt.Sprintf("%dh %dm", hours, minutes)
+			status = "Running"
+		}
+		
+		fmt.Printf("%-20s %-20s %-15s %s\n", startStr, endStr, durationStr, status)
+	}
+
+	// Print summary footer
+	fmt.Println(strings.Repeat("-", 75))
+	
+	// Format total duration
+	totalHours := int(totalDuration.Hours())
+	totalMinutes := int(totalDuration.Minutes()) % 60
+	
+	// Format time range
+	earliestStr := earliestStart.Format("2006-01-02 15:04:05")
+	latestStr := latestEnd.Format("2006-01-02 15:04:05")
+	
+	fmt.Printf("Total Sessions: %d", len(entries))
+	if runningSessions > 0 {
+		fmt.Printf(" (%d running)", runningSessions)
+	}
+	fmt.Printf("\n")
+	fmt.Printf("Time Range: %s to %s\n", earliestStr, latestStr)
+	fmt.Printf("Total Time: %dh %dm\n", totalHours, totalMinutes)
+	
 	return nil
 } 
