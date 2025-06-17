@@ -5,13 +5,14 @@ import (
 	"os"
 
 	"time-tracker/internal/cli"
+	"time-tracker/internal/config"
 	"time-tracker/internal/repository/sqlite"
 )
 
 func main() {
 	// Create repository factory based on environment
-	env := getEnvironment()
-	factory := NewRepositoryFactory(env)
+	env := config.GetEnvironment()
+	factory := config.NewRepositoryFactory(env)
 	
 	// Create repository with dependency injection
 	repo, err := factory.CreateRepository()

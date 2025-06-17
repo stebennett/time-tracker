@@ -50,6 +50,14 @@ The `App` now has two constructors:
 1. **`NewApp(repo Repository)`**: Creates an App with an injected repository (for dependency injection)
 2. **`NewAppWithDefaultRepository()`**: Creates an App with the default SQLite repository (for backward compatibility)
 
+### Configuration Package
+
+The configuration logic is now in `internal/config/repository.go` and provides:
+
+- **Environment Detection**: Determines the current environment from `TT_ENV` environment variable
+- **Repository Factory**: Creates appropriate repository instances based on environment
+- **Environment Types**: Development, Testing, and Production configurations
+
 ## Environment Configuration
 
 The application supports different environments through the `TT_ENV` environment variable:
@@ -90,8 +98,10 @@ export TT_ENV=production
 ### Basic Usage
 
 ```go
+import "time-tracker/internal/config"
+
 // Create a repository factory
-factory := NewRepositoryFactory(Production)
+factory := config.NewRepositoryFactory(config.Production)
 
 // Create repository
 repo, err := factory.CreateRepository()
@@ -105,6 +115,28 @@ app := cli.NewApp(repo)
 
 // Use the app
 err = app.Run(args)
+```
+
+### Environment-Based Configuration
+
+```go
+import "time-tracker/internal/config"
+
+// Get current environment
+env := config.GetEnvironment()
+
+// Create factory for current environment
+factory := config.NewRepositoryFactory(env)
+
+// Create repository
+repo, err := factory.CreateRepository()
+if err != nil {
+    // Handle error
+}
+defer repo.Close()
+
+// Create app with injected repository
+app := cli.NewApp(repo)
 ```
 
 ### Testing with Mock Repository
@@ -174,6 +206,7 @@ case Production:
 
 - **App**: Handles CLI logic and user interaction
 - **Repository**: Handles data access and persistence
+- **Config**: Handles environment detection and repository creation
 - **Factory**: Handles repository creation based on environment
 
 ## Migration Guide
@@ -195,7 +228,9 @@ app, err := cli.NewAppWithDefaultRepository()
 Use the dependency injection approach:
 
 ```go
-// Create repository
+// Create repository using config package
+env := config.GetEnvironment()
+factory := config.NewRepositoryFactory(env)
 repo, err := factory.CreateRepository()
 if err != nil {
     // Handle error
@@ -218,6 +253,7 @@ go test ./...
 
 # Run specific test
 go test ./internal/cli -v
+go test ./internal/config -v
 
 # Run tests with coverage
 go test ./... -cover
@@ -232,4 +268,4 @@ The dependency injection system can be extended to support:
 3. **Caching Layers**: Redis, Memcached, etc.
 4. **Multiple Repositories**: Read replicas, write-ahead logs, etc.
 
-To add a new repository type, simply implement the `Repository` interface and update the factory to support it. 
+To add a new repository type, simply implement the `Repository` interface and update the factory in `internal/config/repository.go` to support it. 

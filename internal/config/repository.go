@@ -1,4 +1,4 @@
-package main
+package config
 
 import (
 	"fmt"
@@ -89,8 +89,8 @@ func (rf *RepositoryFactory) createProductionRepository() (sqlite.Repository, er
 	return repo, nil
 }
 
-// getEnvironment determines the current environment
-func getEnvironment() Environment {
+// GetEnvironment determines the current environment
+func GetEnvironment() Environment {
 	env := os.Getenv("TT_ENV")
 	switch env {
 	case "development":
