@@ -37,14 +37,19 @@ func TestCreateTimeEntry(t *testing.T) {
 	repo, cleanup := setupTestDB(t)
 	defer cleanup()
 
+	task := &Task{TaskName: "Test entry"}
+	err := repo.CreateTask(task)
+	require.NoError(t, err)
+	assert.Greater(t, task.ID, int64(0))
+
 	now := time.Now()
 	entry := &TimeEntry{
-		StartTime:   now,
-		Description: "Test entry",
+		StartTime: now,
+		TaskID:    task.ID,
 	}
 
 	// Test creating entry
-	err := repo.CreateTimeEntry(entry)
+	err = repo.CreateTimeEntry(entry)
 	require.NoError(t, err)
 	assert.Greater(t, entry.ID, int64(0))
 
@@ -53,7 +58,7 @@ func TestCreateTimeEntry(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, entry.ID, retrieved.ID)
 	assert.Equal(t, entry.StartTime.Unix(), retrieved.StartTime.Unix())
-	assert.Equal(t, entry.Description, retrieved.Description)
+	assert.Equal(t, entry.TaskID, retrieved.TaskID)
 	assert.Nil(t, retrieved.EndTime)
 }
 
@@ -67,10 +72,14 @@ func TestGetTimeEntry(t *testing.T) {
 	assert.Contains(t, err.Error(), "not found")
 
 	// Create and get entry
+	task := &Task{TaskName: "Test entry"}
+	err = repo.CreateTask(task)
+	require.NoError(t, err)
+
 	now := time.Now()
 	entry := &TimeEntry{
-		StartTime:   now,
-		Description: "Test entry",
+		StartTime: now,
+		TaskID:    task.ID,
 	}
 	err = repo.CreateTimeEntry(entry)
 	require.NoError(t, err)
@@ -79,18 +88,22 @@ func TestGetTimeEntry(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, entry.ID, retrieved.ID)
 	assert.Equal(t, entry.StartTime.Unix(), retrieved.StartTime.Unix())
-	assert.Equal(t, entry.Description, retrieved.Description)
+	assert.Equal(t, entry.TaskID, retrieved.TaskID)
 }
 
 func TestListTimeEntries(t *testing.T) {
 	repo, cleanup := setupTestDB(t)
 	defer cleanup()
 
+	task := &Task{TaskName: "Test task"}
+	err := repo.CreateTask(task)
+	require.NoError(t, err)
+
 	// Create multiple entries
 	entries := []*TimeEntry{
-		{StartTime: time.Now().Add(-2 * time.Hour), Description: "First entry"},
-		{StartTime: time.Now().Add(-1 * time.Hour), Description: "Second entry"},
-		{StartTime: time.Now(), Description: "Third entry"},
+		{StartTime: time.Now().Add(-2 * time.Hour), TaskID: task.ID},
+		{StartTime: time.Now().Add(-1 * time.Hour), TaskID: task.ID},
+		{StartTime: time.Now(), TaskID: task.ID},
 	}
 
 	for _, entry := range entries {
@@ -112,13 +125,17 @@ func TestUpdateTimeEntry(t *testing.T) {
 	repo, cleanup := setupTestDB(t)
 	defer cleanup()
 
+	task := &Task{TaskName: "Original task"}
+	err := repo.CreateTask(task)
+	require.NoError(t, err)
+
 	// Create entry
 	now := time.Now()
 	entry := &TimeEntry{
-		StartTime:   now,
-		Description: "Original description",
+		StartTime: now,
+		TaskID:    task.ID,
 	}
-	err := repo.CreateTimeEntry(entry)
+	err = repo.CreateTimeEntry(entry)
 	require.NoError(t, err)
 
 	// Update entry
@@ -126,7 +143,7 @@ func TestUpdateTimeEntry(t *testing.T) {
 	endTime := now.Add(2 * time.Hour)
 	entry.StartTime = newTime
 	entry.EndTime = &endTime
-	entry.Description = "Updated description"
+	entry.TaskID = task.ID
 
 	err = repo.UpdateTimeEntry(entry)
 	require.NoError(t, err)
@@ -136,10 +153,10 @@ func TestUpdateTimeEntry(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, newTime.Unix(), retrieved.StartTime.Unix())
 	assert.Equal(t, endTime.Unix(), retrieved.EndTime.Unix())
-	assert.Equal(t, "Updated description", retrieved.Description)
+	assert.Equal(t, task.ID, retrieved.TaskID)
 
 	// Test updating non-existent entry
-	nonExistent := &TimeEntry{ID: 999}
+	nonExistent := &TimeEntry{ID: 999, TaskID: task.ID}
 	err = repo.UpdateTimeEntry(nonExistent)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
@@ -149,12 +166,16 @@ func TestDeleteTimeEntry(t *testing.T) {
 	repo, cleanup := setupTestDB(t)
 	defer cleanup()
 
+	task := &Task{TaskName: "Test task"}
+	err := repo.CreateTask(task)
+	require.NoError(t, err)
+
 	// Create entry
 	entry := &TimeEntry{
-		StartTime:   time.Now(),
-		Description: "Test entry",
+		StartTime: time.Now(),
+		TaskID:    task.ID,
 	}
-	err := repo.CreateTimeEntry(entry)
+	err = repo.CreateTimeEntry(entry)
 	require.NoError(t, err)
 
 	// Delete entry
@@ -176,7 +197,14 @@ func TestSearchTimeEntries(t *testing.T) {
 	repo, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	// Create test entries
+	// Create test tasks
+	task1 := &Task{TaskName: "First meeting"}
+	task2 := &Task{TaskName: "Second meeting"}
+	task3 := &Task{TaskName: "Third meeting"}
+	require.NoError(t, repo.CreateTask(task1))
+	require.NoError(t, repo.CreateTask(task2))
+	require.NoError(t, repo.CreateTask(task3))
+
 	now := time.Now()
 	startTime1 := now.Add(-2 * time.Hour)
 	endTime1 := now
@@ -186,18 +214,18 @@ func TestSearchTimeEntries(t *testing.T) {
 
 	entries := []*TimeEntry{
 		{
-			StartTime:   startTime1,
-			EndTime:     &endTime1,
-			Description: "First meeting",
+			StartTime: startTime1,
+			EndTime:   &endTime1,
+			TaskID:    task1.ID,
 		},
 		{
-			StartTime:   startTime2,
-			Description: "Second meeting",
+			StartTime: startTime2,
+			TaskID:    task2.ID,
 		},
 		{
-			StartTime:   startTime3,
-			EndTime:     &endTime3,
-			Description: "Third meeting",
+			StartTime: startTime3,
+			EndTime:   &endTime3,
+			TaskID:    task3.ID,
 		},
 	}
 
@@ -223,25 +251,25 @@ func TestSearchTimeEntries(t *testing.T) {
 			expected: 3,
 		},
 		{
-			name: "Search by description",
+			name: "Search by task name",
 			opts: SearchOptions{
-				Description: stringPtr("meeting"),
+				TaskName: stringPtr("meeting"),
 			},
 			expected: 3,
 		},
 		{
-			name: "Search by time range and description",
+			name: "Search by time range and task name",
 			opts: SearchOptions{
-				StartTime:   &searchStart,
-				EndTime:     &searchEnd,
-				Description: stringPtr("First"),
+				StartTime: &searchStart,
+				EndTime:   &searchEnd,
+				TaskName:  stringPtr("First"),
 			},
 			expected: 1,
 		},
 		{
 			name: "Search with no results",
 			opts: SearchOptions{
-				Description: stringPtr("nonexistent"),
+				TaskName: stringPtr("nonexistent"),
 			},
 			expected: 0,
 		},
@@ -263,11 +291,11 @@ func TestSearchTimeEntries(t *testing.T) {
 				assert.True(t, results[i-1].StartTime.Before(results[i].StartTime))
 			}
 
-			// For running tasks test, verify the result has no end time
+			// For running tasks test, verify the result has no end time and correct task
 			if tt.name == "Search for running tasks" {
 				assert.Len(t, results, 1)
 				assert.Nil(t, results[0].EndTime)
-				assert.Equal(t, "Second meeting", results[0].Description)
+				assert.Equal(t, task2.ID, results[0].TaskID)
 			}
 		})
 	}

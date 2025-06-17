@@ -235,21 +235,29 @@ func TestListTasks(t *testing.T) {
 	fixedTime := time.Date(2025, 6, 16, 11, 22, 1, 0, time.UTC)
 	timeNow = func() time.Time { return fixedTime }
 
+	// Create some test tasks
+	task1 := &sqlite.Task{TaskName: "First task"}
+	task2 := &sqlite.Task{TaskName: "Second task"}
+	task3 := &sqlite.Task{TaskName: "Third task"}
+	app.repo.CreateTask(task1)
+	app.repo.CreateTask(task2)
+	app.repo.CreateTask(task3)
+
 	// Create some test entries
 	entries := []*sqlite.TimeEntry{
 		{
-			StartTime:   fixedTime.Add(-2 * time.Hour),
-			EndTime:     &fixedTime,
-			Description: "First task",
+			StartTime: fixedTime.Add(-2 * time.Hour),
+			EndTime:   &fixedTime,
+			TaskID:    task1.ID,
 		},
 		{
-			StartTime:   fixedTime.Add(-1 * time.Hour),
-			Description: "Second task",
+			StartTime: fixedTime.Add(-1 * time.Hour),
+			TaskID:    task2.ID,
 		},
 		{
-			StartTime:   fixedTime.Add(-30 * time.Minute),
-			EndTime:     &fixedTime,
-			Description: "Third task",
+			StartTime: fixedTime.Add(-30 * time.Minute),
+			EndTime:   &fixedTime,
+			TaskID:    task3.ID,
 		},
 	}
 
@@ -269,30 +277,25 @@ func TestListTasks(t *testing.T) {
 		{
 			name:    "list all",
 			args:    []string{},
-			want:    "2025-06-16 09:22:01 - 2025-06-16 11:22:01 (2h 0m): First task\n" +
-				"2025-06-16 10:22:01 - running: Second task\n" +
-				"2025-06-16 10:52:01 - 2025-06-16 11:22:01 (0h 30m): Third task\n",
+			want:    "2025-06-16 09:22:01 - 2025-06-16 11:22:01 (2h 0m): First task\n2025-06-16 10:52:01 - 2025-06-16 11:22:01 (0h 30m): Third task\n2025-06-16 10:22:01 - running (0h 0m): Second task\n",
 			wantErr: false,
 		},
 		{
 			name:    "list last hour",
 			args:    []string{"1h"},
-			want:    "2025-06-16 10:22:01 - running: Second task\n" +
-				"2025-06-16 10:52:01 - 2025-06-16 11:22:01 (0h 30m): Third task\n",
+			want:    "2025-06-16 10:52:01 - 2025-06-16 11:22:01 (0h 30m): Third task\n2025-06-16 10:22:01 - running (0h 0m): Second task\n",
 			wantErr: false,
 		},
 		{
 			name:    "list with text filter",
 			args:    []string{"task"},
-			want:    "2025-06-16 09:22:01 - 2025-06-16 11:22:01 (2h 0m): First task\n" +
-				"2025-06-16 10:22:01 - running: Second task\n" +
-				"2025-06-16 10:52:01 - 2025-06-16 11:22:01 (0h 30m): Third task\n",
+			want:    "2025-06-16 09:22:01 - 2025-06-16 11:22:01 (2h 0m): First task\n2025-06-16 10:52:01 - 2025-06-16 11:22:01 (0h 30m): Third task\n2025-06-16 10:22:01 - running (0h 0m): Second task\n",
 			wantErr: false,
 		},
 		{
 			name:    "list with time and text filter",
 			args:    []string{"1h", "Second"},
-			want:    "2025-06-16 10:22:01 - running: Second task\n",
+			want:    "2025-06-16 10:22:01 - running (0h 0m): Second task\n",
 			wantErr: false,
 		},
 	}
@@ -371,9 +374,11 @@ func TestShowCurrentTask(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.setupTask {
 				// Create a running task
+				task := &sqlite.Task{TaskName: "Test task"}
+				app.repo.CreateTask(task)
 				entry := &sqlite.TimeEntry{
-					StartTime:   time.Now(),
-					Description: "Test task",
+					StartTime: time.Now(),
+					TaskID:    task.ID,
 				}
 				err := app.repo.CreateTimeEntry(entry)
 				if err != nil {
@@ -416,17 +421,23 @@ func TestOutputCSV(t *testing.T) {
 	app, cleanup := setupTestApp(t)
 	defer cleanup()
 
+	// Create test tasks
+	task1 := &sqlite.Task{TaskName: "First task"}
+	task2 := &sqlite.Task{TaskName: "Second task"}
+	app.repo.CreateTask(task1)
+	app.repo.CreateTask(task2)
+
 	// Create test entries
 	now := time.Now()
 	entries := []*sqlite.TimeEntry{
 		{
-			StartTime:   now.Add(-2 * time.Hour),
-			EndTime:     &now,
-			Description: "First task",
+			StartTime: now.Add(-2 * time.Hour),
+			EndTime:   &now,
+			TaskID:    task1.ID,
 		},
 		{
-			StartTime:   now.Add(-1 * time.Hour),
-			Description: "Second task",
+			StartTime: now.Add(-1 * time.Hour),
+			TaskID:    task2.ID,
 		},
 	}
 
@@ -469,7 +480,7 @@ func TestOutputCSV(t *testing.T) {
 
 	// Check header
 	header := strings.Split(lines[0], ",")
-	expectedHeader := []string{"ID", "Start Time", "End Time", "Duration (hours)", "Description"}
+	expectedHeader := []string{"ID", "Start Time", "End Time", "Duration (hours)", "Task Name"}
 	if len(header) != len(expectedHeader) {
 		t.Errorf("outputCSV() header has %d columns, want %d", len(header), len(expectedHeader))
 		return
@@ -490,5 +501,200 @@ func TestOutputCSV(t *testing.T) {
 	}
 	if duration < 1.9 || duration > 2.1 {
 		t.Errorf("outputCSV() duration = %.2f, want approximately 2.0", duration)
+	}
+}
+
+func TestDuplicateTaskNames(t *testing.T) {
+	app, cleanup := setupTestApp(t)
+	defer cleanup()
+
+	// Create two tasks with the same name
+	taskName := "Duplicate Task"
+	err := app.createNewTask(taskName)
+	if err != nil {
+		t.Fatalf("Failed to create first task: %v", err)
+	}
+	time.Sleep(10 * time.Millisecond) // Ensure different start times
+	err = app.createNewTask(taskName)
+	if err != nil {
+		t.Fatalf("Failed to create second task: %v", err)
+	}
+
+	entries, err := app.repo.ListTimeEntries()
+	if err != nil {
+		t.Fatalf("Failed to list time entries: %v", err)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("Expected 2 time entries, got %d", len(entries))
+	}
+
+	task1, err := app.repo.GetTask(entries[0].TaskID)
+	if err != nil {
+		t.Fatalf("Failed to get task 1: %v", err)
+	}
+	task2, err := app.repo.GetTask(entries[1].TaskID)
+	if err != nil {
+		t.Fatalf("Failed to get task 2: %v", err)
+	}
+	if task1.TaskName != taskName || task2.TaskName != taskName {
+		t.Fatalf("Expected both tasks to have name %q, got %q and %q", taskName, task1.TaskName, task2.TaskName)
+	}
+	if task1.ID == task2.ID {
+		t.Fatalf("Expected different task IDs for duplicate names, got %d", task1.ID)
+	}
+}
+
+func TestMultipleRunningTasksAndStop(t *testing.T) {
+	app, cleanup := setupTestApp(t)
+	defer cleanup()
+
+	// Create two running tasks (simulate by direct repo usage)
+	task1 := &sqlite.Task{TaskName: "Task 1"}
+	task2 := &sqlite.Task{TaskName: "Task 2"}
+	app.repo.CreateTask(task1)
+	app.repo.CreateTask(task2)
+	entry1 := &sqlite.TimeEntry{StartTime: time.Now().Add(-2 * time.Hour), TaskID: task1.ID}
+	entry2 := &sqlite.TimeEntry{StartTime: time.Now().Add(-1 * time.Hour), TaskID: task2.ID}
+	app.repo.CreateTimeEntry(entry1)
+	app.repo.CreateTimeEntry(entry2)
+
+	// Stop all running tasks
+	err := app.stopRunningTasks()
+	if err != nil {
+		t.Fatalf("Failed to stop running tasks: %v", err)
+	}
+
+	entries, err := app.repo.ListTimeEntries()
+	if err != nil {
+		t.Fatalf("Failed to list time entries: %v", err)
+	}
+	for _, entry := range entries {
+		if entry.EndTime == nil {
+			t.Fatalf("Expected all tasks to be stopped, but found running task with ID %d", entry.ID)
+		}
+	}
+}
+
+func TestSearchByPartialTaskName(t *testing.T) {
+	app, cleanup := setupTestApp(t)
+	defer cleanup()
+
+	task1 := &sqlite.Task{TaskName: "Alpha Project"}
+	task2 := &sqlite.Task{TaskName: "Beta Project"}
+	task3 := &sqlite.Task{TaskName: "Alpha Test"}
+	app.repo.CreateTask(task1)
+	app.repo.CreateTask(task2)
+	app.repo.CreateTask(task3)
+	app.repo.CreateTimeEntry(&sqlite.TimeEntry{StartTime: time.Now(), TaskID: task1.ID})
+	app.repo.CreateTimeEntry(&sqlite.TimeEntry{StartTime: time.Now(), TaskID: task2.ID})
+	app.repo.CreateTimeEntry(&sqlite.TimeEntry{StartTime: time.Now(), TaskID: task3.ID})
+
+	// Search for "Alpha"
+	alpha := "Alpha"
+	opts := sqlite.SearchOptions{TaskName: &alpha}
+	results, err := app.repo.SearchTimeEntries(opts)
+	if err != nil {
+		t.Fatalf("Failed to search time entries: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("Expected 2 results for partial search 'Alpha', got %d", len(results))
+	}
+
+	// Search for "Project"
+	project := "Project"
+	opts = sqlite.SearchOptions{TaskName: &project}
+	results, err = app.repo.SearchTimeEntries(opts)
+	if err != nil {
+		t.Fatalf("Failed to search time entries: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("Expected 2 results for partial search 'Project', got %d", len(results))
+	}
+}
+
+// Helper to run resume with injected stdin
+func runResumeWithInput(app *App, args []string, input string) (output string, err error) {
+	oldStdin := os.Stdin
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	inR, inW, _ := os.Pipe()
+	os.Stdin = inR
+	inW.Write([]byte(input + "\n"))
+	inW.Close()
+
+	err = app.resumeTask(args)
+
+	w.Close()
+	os.Stdout = oldStdout
+	os.Stdin = oldStdin
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	output = buf.String()
+	return
+}
+
+func TestResumeFeature_Acceptance(t *testing.T) {
+	app, cleanup := setupTestApp(t)
+	defer cleanup()
+
+	// Use a fixed time for determinism
+	fixedTime := time.Date(2025, 6, 16, 12, 0, 0, 0, time.UTC)
+	timeNow = func() time.Time { return fixedTime }
+
+	// Create tasks and entries for today and previous days
+	task1 := &sqlite.Task{TaskName: "Alpha"}
+	task2 := &sqlite.Task{TaskName: "Beta"}
+	task3 := &sqlite.Task{TaskName: "Gamma"}
+	app.repo.CreateTask(task1)
+	app.repo.CreateTask(task2)
+	app.repo.CreateTask(task3)
+	// Today
+	app.repo.CreateTimeEntry(&sqlite.TimeEntry{StartTime: fixedTime.Add(-2 * time.Hour), EndTime: &fixedTime, TaskID: task1.ID})
+	app.repo.CreateTimeEntry(&sqlite.TimeEntry{StartTime: fixedTime.Add(-1 * time.Hour), TaskID: task2.ID})
+	// Previous day
+	app.repo.CreateTimeEntry(&sqlite.TimeEntry{StartTime: fixedTime.Add(-26 * time.Hour), EndTime: &fixedTime, TaskID: task3.ID})
+
+	// 1. Resume with default (today), select task 1 (Beta)
+	output, err := runResumeWithInput(app, []string{}, "1")
+	if err != nil {
+		t.Fatalf("resumeTask failed: %v", err)
+	}
+	if !strings.Contains(output, "Select a task to resume:") || !strings.Contains(output, "Beta") || !strings.Contains(output, "Resumed task: Beta") {
+		t.Errorf("unexpected output: %s", output)
+	}
+	// Check that a new time entry for Beta was created and any running task is stopped
+	entries, _ := app.repo.ListTimeEntries()
+	var found bool
+	for _, e := range entries {
+		if e.TaskID == task2.ID && e.StartTime.Equal(fixedTime) {
+			found = true
+		}
+		if e.EndTime == nil && e.TaskID != task2.ID {
+			t.Errorf("unexpected running task: %v", e)
+		}
+	}
+	if !found {
+		t.Errorf("expected new time entry for Beta at %v", fixedTime)
+	}
+
+	// 2. Resume with custom duration (3h), select task 2 (Alpha)
+	output, err = runResumeWithInput(app, []string{"3h"}, "2")
+	if err != nil {
+		t.Fatalf("resumeTask failed: %v", err)
+	}
+	if !strings.Contains(output, "Alpha") || !strings.Contains(output, "Resumed task: Alpha") {
+		t.Errorf("unexpected output: %s", output)
+	}
+
+	// 3. Resume and quit with 'q'
+	output, err = runResumeWithInput(app, []string{}, "q")
+	if err != nil {
+		t.Fatalf("resumeTask failed: %v", err)
+	}
+	if !strings.Contains(output, "Resume cancelled.") {
+		t.Errorf("expected cancel message, got: %s", output)
 	}
 } 

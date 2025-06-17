@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -84,6 +85,8 @@ func (a *App) Run(args []string) error {
 		return a.showCurrentTask()
 	case "output":
 		return a.outputTasks(args[1:])
+	case "resume":
+		return a.resumeTask(args[1:])
 	default:
 		// Otherwise, treat as a new task
 		text := strings.Join(args, " ")
@@ -151,12 +154,12 @@ func (a *App) listTasks(args []string) error {
 		// If there are more arguments, use them as search text
 		if len(args) > 1 {
 			text := strings.Join(args[1:], " ")
-			opts.Description = &text
+			opts.TaskName = &text
 		}
 	} else {
 		// No time shorthand, treat all arguments as search text
 		text := strings.Join(args, " ")
-		opts.Description = &text
+		opts.TaskName = &text
 	}
 
 	// Search for entries
@@ -168,35 +171,62 @@ func (a *App) listTasks(args []string) error {
 	return a.printEntries(entries)
 }
 
-// printEntries prints the time entries in a formatted way
+// printEntries prints one line per task in the format:
+// startTime - endTime (duration): taskName
+// Where startTime and endTime are from the last time entry for the task, and endTime is 'running' if the entry is running.
 func (a *App) printEntries(entries []*sqlite.TimeEntry) error {
 	if len(entries) == 0 {
 		fmt.Println("No tasks found")
 		return nil
 	}
 
+	// Group entries by TaskID and find the last entry for each task
+	type lastEntryInfo struct {
+		TaskName  string
+		StartTime time.Time
+		EndTime   *time.Time
+		IsRunning bool
+	}
+	lastEntryMap := make(map[int64]*lastEntryInfo)
 	for _, entry := range entries {
-		// Format start time
-		startTime := entry.StartTime.Format("2006-01-02 15:04:05")
-		
-		// Format end time or "running"
-		var endTimeStr string
-		if entry.EndTime == nil {
-			endTimeStr = "running"
-		} else {
-			endTimeStr = entry.EndTime.Format("2006-01-02 15:04:05")
+		task, err := a.repo.GetTask(entry.TaskID)
+		if err != nil {
+			return fmt.Errorf("failed to get task for entry %d: %w", entry.ID, err)
 		}
-
-		// Calculate duration if task is completed
-		var durationStr string
-		if entry.EndTime != nil {
-			duration := entry.EndTime.Sub(entry.StartTime)
-			hours := int(duration.Hours())
-			minutes := int(duration.Minutes()) % 60
-			durationStr = fmt.Sprintf(" (%dh %dm)", hours, minutes)
+		info, ok := lastEntryMap[entry.TaskID]
+		if !ok || entry.StartTime.After(info.StartTime) {
+			lastEntryMap[entry.TaskID] = &lastEntryInfo{
+				TaskName:  task.TaskName,
+				StartTime: entry.StartTime,
+				EndTime:   entry.EndTime,
+				IsRunning: entry.EndTime == nil,
+			}
 		}
+	}
 
-		fmt.Printf("%s - %s%s: %s\n", startTime, endTimeStr, durationStr, entry.Description)
+	// Print one line per task in the requested format
+	// Collect and sort by StartTime ascending (most recent at the bottom)
+	var infos []*lastEntryInfo
+	for _, info := range lastEntryMap {
+		infos = append(infos, info)
+	}
+	sort.Slice(infos, func(i, j int) bool {
+		return infos[i].StartTime.Before(infos[j].StartTime)
+	})
+	for _, info := range infos {
+		startStr := info.StartTime.Format("2006-01-02 15:04:05")
+		var endStr string
+		var duration time.Duration
+		if info.IsRunning {
+			endStr = "running"
+			duration = timeNow().Sub(info.StartTime)
+		} else if info.EndTime != nil {
+			endStr = info.EndTime.Format("2006-01-02 15:04:05")
+			duration = info.EndTime.Sub(info.StartTime)
+		}
+		hours := int(duration.Hours())
+		minutes := int(duration.Minutes()) % 60
+		fmt.Printf("%s - %s (%dh %dm): %s\n", startStr, endStr, hours, minutes, info.TaskName)
 	}
 
 	return nil
@@ -226,24 +256,30 @@ func (a *App) stopRunningTasks() error {
 }
 
 // createNewTask creates a new task
-func (a *App) createNewTask(description string) error {
+func (a *App) createNewTask(taskName string) error {
 	// First, stop any running tasks
 	if err := a.stopRunningTasks(); err != nil {
 		return err
 	}
 
-	// Create new task
+	// Always create a new task
+	task := &sqlite.Task{TaskName: taskName}
+	if err := a.repo.CreateTask(task); err != nil {
+		return fmt.Errorf("failed to create task: %w", err)
+	}
+
+	// Create new time entry
 	now := timeNow()
 	entry := &sqlite.TimeEntry{
-		StartTime:   now,
-		Description: description,
+		StartTime: now,
+		TaskID:    task.ID,
 	}
 
 	if err := a.repo.CreateTimeEntry(entry); err != nil {
 		return fmt.Errorf("failed to create new task: %w", err)
 	}
 
-	fmt.Printf("Started new task: %s\n", description)
+	fmt.Printf("Started new task: %s\n", taskName)
 	return nil
 }
 
@@ -267,8 +303,13 @@ func (a *App) showCurrentTask() error {
 	hours := int(duration.Hours())
 	minutes := int(duration.Minutes()) % 60
 
+	task, err := a.repo.GetTask(entry.TaskID)
+	if err != nil {
+		return fmt.Errorf("failed to get task for entry %d: %w", entry.ID, err)
+	}
+
 	fmt.Printf("Current task: %s (running for %dh %dm)\n", 
-		entry.Description, hours, minutes)
+		task.TaskName, hours, minutes)
 	return nil
 }
 
@@ -306,7 +347,7 @@ func (a *App) outputCSV() error {
 	defer writer.Flush()
 
 	// Write header
-	header := []string{"ID", "Start Time", "End Time", "Duration (hours)", "Description"}
+	header := []string{"ID", "Start Time", "End Time", "Duration (hours)", "Task Name"}
 	if err := writer.Write(header); err != nil {
 		return fmt.Errorf("failed to write CSV header: %w", err)
 	}
@@ -324,18 +365,108 @@ func (a *App) outputCSV() error {
 			duration = entry.EndTime.Sub(entry.StartTime).Hours()
 		}
 
+		task, err := a.repo.GetTask(entry.TaskID)
+		if err != nil {
+			return fmt.Errorf("failed to get task for entry %d: %w", entry.ID, err)
+		}
+
 		// Write row
 		row := []string{
 			strconv.FormatInt(entry.ID, 10),
 			startTime,
 			endTime,
 			fmt.Sprintf("%.2f", duration),
-			entry.Description,
+			task.TaskName,
 		}
 		if err := writer.Write(row); err != nil {
 			return fmt.Errorf("failed to write CSV row: %w", err)
 		}
 	}
 
+	return nil
+}
+
+// resumeTask implements the resume scenario
+func (a *App) resumeTask(args []string) error {
+	// Determine time range (default: today)
+	var startTime time.Time
+	now := timeNow()
+	if len(args) > 0 {
+		dur, err := parseTimeShorthand(args[0])
+		if err != nil {
+			return fmt.Errorf("invalid time shorthand: %v", err)
+		}
+		startTime = now.Add(-dur)
+	} else {
+		y, m, d := now.Date()
+		startTime = time.Date(y, m, d, 0, 0, 0, 0, now.Location())
+	}
+
+	// Find all time entries in the period, most recent first
+	opts := sqlite.SearchOptions{StartTime: &startTime, EndTime: &now}
+	entries, err := a.repo.SearchTimeEntries(opts)
+	if err != nil {
+		return fmt.Errorf("failed to search time entries: %w", err)
+	}
+	if len(entries) == 0 {
+		fmt.Println("No tasks found in the selected period.")
+		return nil
+	}
+
+	// Group by task, show most recent entry for each task
+	taskMap := make(map[int64]*sqlite.TimeEntry)
+	for i := len(entries) - 1; i >= 0; i-- { // reverse for most recent
+		entry := entries[i]
+		if _, ok := taskMap[entry.TaskID]; !ok {
+			taskMap[entry.TaskID] = entry
+		}
+	}
+
+	// Build a slice for display
+	var taskIDs []int64
+	for id := range taskMap {
+		taskIDs = append(taskIDs, id)
+	}
+	// Sort by most recent start time
+	sort.Slice(taskIDs, func(i, j int) bool {
+		return taskMap[taskIDs[i]].StartTime.After(taskMap[taskIDs[j]].StartTime)
+	})
+
+	fmt.Println("Select a task to resume:")
+	for i, id := range taskIDs {
+		task, _ := a.repo.GetTask(id)
+		last := taskMap[id].StartTime.Format("2006-01-02 15:04:05")
+		fmt.Printf("%d. %s (last worked: %s)\n", i+1, task.TaskName, last)
+	}
+	fmt.Print("Enter number to resume, or 'q' to quit: ")
+
+	// Read user input
+	var input string
+	fmt.Fscanln(os.Stdin, &input)
+	if input == "q" || input == "Q" {
+		fmt.Println("Resume cancelled.")
+		return nil
+	}
+	idx, err := strconv.Atoi(input)
+	if err != nil || idx < 1 || idx > len(taskIDs) {
+		return fmt.Errorf("invalid selection")
+	}
+	selectedTaskID := taskIDs[idx-1]
+
+	// Stop any running tasks
+	if err := a.stopRunningTasks(); err != nil {
+		return err
+	}
+
+	// Create a new time entry for the selected task
+	entry := &sqlite.TimeEntry{
+		StartTime: timeNow(),
+		TaskID:    selectedTaskID,
+	}
+	if err := a.repo.CreateTimeEntry(entry); err != nil {
+		return fmt.Errorf("failed to resume task: %w", err)
+	}
+	task, _ := a.repo.GetTask(selectedTaskID)
+	fmt.Printf("Resumed task: %s\n", task.TaskName)
 	return nil
 } 
