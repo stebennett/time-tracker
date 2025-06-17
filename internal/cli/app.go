@@ -204,15 +204,22 @@ func (a *App) printEntries(entries []*sqlite.TimeEntry) error {
 		}
 	}
 
-	// Print one line per task in the requested format
-	// Collect and sort by StartTime ascending (most recent at the bottom)
-	var infos []*lastEntryInfo
+	// Collect and sort: non-running tasks by StartTime ascending, running tasks last
+	var runningInfos, finishedInfos []*lastEntryInfo
 	for _, info := range lastEntryMap {
-		infos = append(infos, info)
+		if info.IsRunning {
+			runningInfos = append(runningInfos, info)
+		} else {
+			finishedInfos = append(finishedInfos, info)
+		}
 	}
-	sort.Slice(infos, func(i, j int) bool {
-		return infos[i].StartTime.Before(infos[j].StartTime)
+	sort.Slice(finishedInfos, func(i, j int) bool {
+		return finishedInfos[i].StartTime.Before(finishedInfos[j].StartTime)
 	})
+	sort.Slice(runningInfos, func(i, j int) bool {
+		return runningInfos[i].StartTime.Before(runningInfos[j].StartTime)
+	})
+	infos := append(finishedInfos, runningInfos...)
 	for _, info := range infos {
 		startStr := info.StartTime.Format("2006-01-02 15:04:05")
 		var endStr string

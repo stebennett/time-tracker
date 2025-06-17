@@ -277,25 +277,25 @@ func TestListTasks(t *testing.T) {
 		{
 			name:    "list all",
 			args:    []string{},
-			want:    "2025-06-16 09:22:01 - 2025-06-16 11:22:01 (2h 0m): First task\n2025-06-16 10:52:01 - 2025-06-16 11:22:01 (0h 30m): Third task\n2025-06-16 10:22:01 - running (0h 0m): Second task\n",
+			want:    "2025-06-16 09:22:01 - 2025-06-16 11:22:01 (2h 0m): First task\n2025-06-16 10:52:01 - 2025-06-16 11:22:01 (0h 30m): Third task\n2025-06-16 10:22:01 - running (1h 0m): Second task\n",
 			wantErr: false,
 		},
 		{
 			name:    "list last hour",
 			args:    []string{"1h"},
-			want:    "2025-06-16 10:52:01 - 2025-06-16 11:22:01 (0h 30m): Third task\n2025-06-16 10:22:01 - running (0h 0m): Second task\n",
+			want:    "2025-06-16 10:52:01 - 2025-06-16 11:22:01 (0h 30m): Third task\n2025-06-16 10:22:01 - running (1h 0m): Second task\n",
 			wantErr: false,
 		},
 		{
 			name:    "list with text filter",
 			args:    []string{"task"},
-			want:    "2025-06-16 09:22:01 - 2025-06-16 11:22:01 (2h 0m): First task\n2025-06-16 10:52:01 - 2025-06-16 11:22:01 (0h 30m): Third task\n2025-06-16 10:22:01 - running (0h 0m): Second task\n",
+			want:    "2025-06-16 09:22:01 - 2025-06-16 11:22:01 (2h 0m): First task\n2025-06-16 10:52:01 - 2025-06-16 11:22:01 (0h 30m): Third task\n2025-06-16 10:22:01 - running (1h 0m): Second task\n",
 			wantErr: false,
 		},
 		{
 			name:    "list with time and text filter",
 			args:    []string{"1h", "Second"},
-			want:    "2025-06-16 10:22:01 - running (0h 0m): Second task\n",
+			want:    "2025-06-16 10:22:01 - running (1h 0m): Second task\n",
 			wantErr: false,
 		},
 	}
