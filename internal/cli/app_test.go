@@ -1108,3 +1108,125 @@ func TestShowTaskSummary(t *testing.T) {
 		})
 	}
 }
+
+// Helper to run delete with injected stdin
+func runDeleteWithInput(app *App, args []string, input string) (output string, err error) {
+	oldStdin := os.Stdin
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	inR, inW, _ := os.Pipe()
+	os.Stdin = inR
+	inW.Write([]byte(input + "\n"))
+	inW.Close()
+
+	err = app.deleteTask(args)
+
+	w.Close()
+	os.Stdout = oldStdout
+	os.Stdin = oldStdin
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	output = buf.String()
+	return
+}
+
+func TestDeleteCommand(t *testing.T) {
+	fixedTime := time.Date(2025, 6, 16, 12, 0, 0, 0, time.UTC)
+	timeNow = func() time.Time { return fixedTime }
+
+	t.Run("delete task from last 24h", func(t *testing.T) {
+		app, cleanup := setupTestAppWithInMemoryRepo(t)
+		defer cleanup()
+		task := &sqlite.Task{TaskName: "Task 1"}
+		app.repo.CreateTask(task)
+		entry := &sqlite.TimeEntry{TaskID: task.ID, StartTime: fixedTime.Add(-2 * time.Hour), EndTime: &fixedTime}
+		app.repo.CreateTimeEntry(entry)
+		output, err := runDeleteWithInput(app, []string{}, "1")
+		if err != nil {
+			t.Fatalf("deleteTask failed: %v", err)
+		}
+		if !strings.Contains(output, "Deleted task: Task 1") {
+			t.Errorf("unexpected output: %s", output)
+		}
+	})
+
+	t.Run("delete task with custom duration", func(t *testing.T) {
+		app, cleanup := setupTestAppWithInMemoryRepo(t)
+		defer cleanup()
+		task := &sqlite.Task{TaskName: "Old Task"}
+		app.repo.CreateTask(task)
+		entry := &sqlite.TimeEntry{TaskID: task.ID, StartTime: fixedTime.Add(-48 * time.Hour), EndTime: &fixedTime}
+		app.repo.CreateTimeEntry(entry)
+		output, err := runDeleteWithInput(app, []string{"3d"}, "1")
+		if err != nil {
+			t.Fatalf("deleteTask failed: %v", err)
+		}
+		if !strings.Contains(output, "Deleted task: Old Task") {
+			t.Errorf("unexpected output: %s", output)
+		}
+	})
+
+	t.Run("delete with text filter", func(t *testing.T) {
+		app, cleanup := setupTestAppWithInMemoryRepo(t)
+		defer cleanup()
+		task1 := &sqlite.Task{TaskName: "Alpha"}
+		task2 := &sqlite.Task{TaskName: "Beta"}
+		app.repo.CreateTask(task1)
+		app.repo.CreateTask(task2)
+		entry1 := &sqlite.TimeEntry{TaskID: task1.ID, StartTime: fixedTime.Add(-2 * time.Hour), EndTime: &fixedTime}
+		entry2 := &sqlite.TimeEntry{TaskID: task2.ID, StartTime: fixedTime.Add(-3 * time.Hour), EndTime: &fixedTime}
+		app.repo.CreateTimeEntry(entry1)
+		app.repo.CreateTimeEntry(entry2)
+		output, err := runDeleteWithInput(app, []string{"Alpha"}, "1")
+		if err != nil {
+			t.Fatalf("deleteTask failed: %v", err)
+		}
+		if !strings.Contains(output, "Deleted task: Alpha") {
+			t.Errorf("unexpected output: %s", output)
+		}
+	})
+
+	t.Run("cancel delete", func(t *testing.T) {
+		app, cleanup := setupTestAppWithInMemoryRepo(t)
+		defer cleanup()
+		task := &sqlite.Task{TaskName: "Task X"}
+		app.repo.CreateTask(task)
+		entry := &sqlite.TimeEntry{TaskID: task.ID, StartTime: fixedTime.Add(-2 * time.Hour), EndTime: &fixedTime}
+		app.repo.CreateTimeEntry(entry)
+		output, err := runDeleteWithInput(app, []string{}, "q")
+		if err != nil {
+			t.Fatalf("deleteTask failed: %v", err)
+		}
+		if !strings.Contains(output, "Delete cancelled.") {
+			t.Errorf("unexpected output: %s", output)
+		}
+	})
+
+	t.Run("invalid selection", func(t *testing.T) {
+		app, cleanup := setupTestAppWithInMemoryRepo(t)
+		defer cleanup()
+		task := &sqlite.Task{TaskName: "Task Y"}
+		app.repo.CreateTask(task)
+		entry := &sqlite.TimeEntry{TaskID: task.ID, StartTime: fixedTime.Add(-2 * time.Hour), EndTime: &fixedTime}
+		app.repo.CreateTimeEntry(entry)
+		_, err := runDeleteWithInput(app, []string{}, "99")
+		if err == nil || !strings.Contains(err.Error(), "invalid selection") {
+			t.Errorf("expected invalid selection error, got: %v", err)
+		}
+	})
+
+	t.Run("no tasks found to delete", func(t *testing.T) {
+		app, cleanup := setupTestAppWithInMemoryRepo(t)
+		defer cleanup()
+		output, err := runDeleteWithInput(app, []string{}, "1")
+		if err != nil {
+			t.Fatalf("deleteTask failed: %v", err)
+		}
+		if !strings.Contains(output, "No tasks found to delete.") {
+			t.Errorf("unexpected output: %s", output)
+		}
+	})
+}
