@@ -268,4 +268,10 @@ The dependency injection system can be extended to support:
 3. **Caching Layers**: Redis, Memcached, etc.
 4. **Multiple Repositories**: Read replicas, write-ahead logs, etc.
 
-To add a new repository type, simply implement the `Repository` interface and update the factory in `internal/config/repository.go` to support it. 
+To add a new repository type, simply implement the `Repository` interface and update the factory in `internal/config/repository.go` to support it.
+
+If you want to start a new task using the CLI, use:
+
+    tt start "Task name"
+
+instead of relying on default or implicit task creation. 

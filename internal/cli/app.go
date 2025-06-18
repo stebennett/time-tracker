@@ -75,18 +75,23 @@ func NewAppWithDefaultRepository() (*App, error) {
 // Run executes the CLI application with the given arguments
 func (a *App) Run(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: tt \"your text here\" or tt stop or tt list [time] [text] or tt current or tt output format=csv or tt summary [time] [text] or tt resume")
+		return fmt.Errorf("usage: tt start \"your text here\" or tt stop or tt list [time] [text] or tt current or tt output format=csv or tt summary [time] [text] or tt resume")
 	}
 
 	// Handle different commands
 	switch args[0] {
+	case "start":
+		if len(args) < 2 {
+			return fmt.Errorf("usage: tt start \"your text here\"")
+		}
+		text := strings.Join(args[1:], " ")
+		return a.createNewTask(text)
 	case "stop":
 		if len(args) == 1 {
 			return a.stopRunningTasks()
 		}
-		// If there are additional arguments, treat as a new task
-		text := strings.Join(args, " ")
-		return a.createNewTask(text)
+		// If there are additional arguments, treat as an error
+		return fmt.Errorf("usage: tt stop")
 	case "list":
 		return a.listTasks(args[1:])
 	case "current":
@@ -98,9 +103,7 @@ func (a *App) Run(args []string) error {
 	case "summary":
 		return a.summaryTask(args[1:])
 	default:
-		// Otherwise, treat as a new task
-		text := strings.Join(args, " ")
-		return a.createNewTask(text)
+		return fmt.Errorf("unknown command: %s", args[0])
 	}
 }
 

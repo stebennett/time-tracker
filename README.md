@@ -54,13 +54,23 @@ export TT_DB=/custom/path/to/tt.db
 
 ## Usage
 
-Basic usage:
-```bash
-# Start a new task
-tt "your text here"
+To start a new task:
 
-# Stop all running tasks
+```
+tt start "Your task name here"
+```
+
+To stop all running tasks:
+
+```
 tt stop
+```
+
+To list tasks:
+
+```
+tt list
+```
 
 # Show current task
 tt current
@@ -80,7 +90,16 @@ tt summary 1d "project"    # Show tasks with "project" in name worked on in last
 
 # Export tasks
 tt output format=csv       # Export all tasks to CSV format
-```
+
+## Commands
+
+- `tt start "Task name"` - Start a new task
+- `tt stop` - Stop all running tasks
+- `tt list [time] [text]` - List tasks, optionally filtered by time or text
+- `tt current` - Show the currently running task
+- `tt output format=csv` - Output all tasks in CSV format
+- `tt summary [time] [text]` - Show a summary for a task
+- `tt resume` - Resume a previous task
 
 Time shorthand formats:
 - `nm` = last n minutes (e.g., "30m")

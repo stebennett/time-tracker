@@ -41,26 +41,20 @@ func TestApp_Run(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:    "stop now is a new task",
+			name:    "stop with extra args (error)",
 			args:    []string{"stop", "now"},
-			want:    "All running tasks have been stopped\nStarted new task: stop now\n",
-			wantErr: false,
+			want:    "",
+			wantErr: true,
 		},
 		{
-			name:    "stop working is a new task",
-			args:    []string{"stop", "working"},
-			want:    "All running tasks have been stopped\nStarted new task: stop working\n",
-			wantErr: false,
-		},
-		{
-			name:    "new task",
-			args:    []string{"Working on feature X"},
+			name:    "start new task",
+			args:    []string{"start", "Working on feature X"},
 			want:    "All running tasks have been stopped\nStarted new task: Working on feature X\n",
 			wantErr: false,
 		},
 		{
-			name:    "multiple words task",
-			args:    []string{"Working", "on", "feature", "X"},
+			name:    "start multiple words task",
+			args:    []string{"start", "Working", "on", "feature", "X"},
 			want:    "All running tasks have been stopped\nStarted new task: Working on feature X\n",
 			wantErr: false,
 		},
@@ -99,6 +93,12 @@ func TestApp_Run(t *testing.T) {
 			args:    []string{"summary"},
 			want:    "No tasks found matching the criteria.\n",
 			wantErr: false,
+		},
+		{
+			name:    "unknown command",
+			args:    []string{"foobar"},
+			want:    "",
+			wantErr: true,
 		},
 	}
 
