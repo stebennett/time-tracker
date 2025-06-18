@@ -143,7 +143,7 @@ func parseTimeShorthand(shorthand string) (time.Duration, error) {
 // listTasks handles the list command with various options
 func (a *App) listTasks(args []string) error {
 	opts := sqlite.SearchOptions{}
-	
+
 	// If no arguments, list all tasks
 	if len(args) == 0 {
 		entries, err := a.repo.ListTimeEntries()
@@ -325,7 +325,7 @@ func (a *App) showCurrentTask() error {
 		return fmt.Errorf("failed to get task for entry %d: %w", entry.ID, err)
 	}
 
-	fmt.Printf("Current task: %s (running for %dh %dm)\n", 
+	fmt.Printf("Current task: %s (running for %dh %dm)\n",
 		task.TaskName, hours, minutes)
 	return nil
 }
@@ -494,14 +494,14 @@ func (a *App) summaryTask(args []string) error {
 	var startTime *time.Time
 	var searchText string
 	now := timeNow()
-	
+
 	if len(args) > 0 {
 		// Check if first argument is a time shorthand
 		if duration, err := parseTimeShorthand(args[0]); err == nil {
 			// Time shorthand found, set time range
 			start := now.Add(-duration)
 			startTime = &start
-			
+
 			// If there are more arguments, use them as search text
 			if len(args) > 1 {
 				searchText = strings.Join(args[1:], " ")
@@ -514,7 +514,7 @@ func (a *App) summaryTask(args []string) error {
 
 	// Find tasks that match the criteria
 	var matchingTaskIDs []int64
-	
+
 	if startTime != nil {
 		// If time filter is specified, find tasks that have ANY entries in the time window
 		timeFilterOpts := sqlite.SearchOptions{
@@ -524,18 +524,18 @@ func (a *App) summaryTask(args []string) error {
 		if searchText != "" {
 			timeFilterOpts.TaskName = &searchText
 		}
-		
+
 		timeFilterEntries, err := a.repo.SearchTimeEntries(timeFilterOpts)
 		if err != nil {
 			return fmt.Errorf("failed to search time entries: %w", err)
 		}
-		
+
 		// Get unique task IDs from entries in the time window
 		taskIDSet := make(map[int64]bool)
 		for _, entry := range timeFilterEntries {
 			taskIDSet[entry.TaskID] = true
 		}
-		
+
 		// Convert to slice
 		for taskID := range taskIDSet {
 			matchingTaskIDs = append(matchingTaskIDs, taskID)
@@ -545,18 +545,18 @@ func (a *App) summaryTask(args []string) error {
 		textFilterOpts := sqlite.SearchOptions{
 			TaskName: &searchText,
 		}
-		
+
 		textFilterEntries, err := a.repo.SearchTimeEntries(textFilterOpts)
 		if err != nil {
 			return fmt.Errorf("failed to search time entries: %w", err)
 		}
-		
+
 		// Get unique task IDs
 		taskIDSet := make(map[int64]bool)
 		for _, entry := range textFilterEntries {
 			taskIDSet[entry.TaskID] = true
 		}
-		
+
 		// Convert to slice
 		for taskID := range taskIDSet {
 			matchingTaskIDs = append(matchingTaskIDs, taskID)
@@ -567,13 +567,13 @@ func (a *App) summaryTask(args []string) error {
 		if err != nil {
 			return fmt.Errorf("failed to list time entries: %w", err)
 		}
-		
+
 		// Get unique task IDs
 		taskIDSet := make(map[int64]bool)
 		for _, entry := range allEntries {
 			taskIDSet[entry.TaskID] = true
 		}
-		
+
 		// Convert to slice
 		for taskID := range taskIDSet {
 			matchingTaskIDs = append(matchingTaskIDs, taskID)
@@ -664,7 +664,7 @@ func (a *App) showTaskSummary(taskID int64) error {
 		if entry.EndTime != nil {
 			duration := entry.EndTime.Sub(entry.StartTime)
 			totalDuration += duration
-			
+
 			if entry.EndTime.After(latestEnd) {
 				latestEnd = *entry.EndTime
 			}
@@ -673,7 +673,7 @@ func (a *App) showTaskSummary(taskID int64) error {
 			runningSessions++
 			currentDuration := timeNow().Sub(entry.StartTime)
 			totalDuration += currentDuration
-			
+
 			// For running sessions, use current time as latest
 			if timeNow().After(latestEnd) {
 				latestEnd = timeNow()
@@ -693,7 +693,7 @@ func (a *App) showTaskSummary(taskID int64) error {
 	for _, entry := range entries {
 		startStr := entry.StartTime.Format("2006-01-02 15:04:05")
 		var endStr, durationStr, status string
-		
+
 		if entry.EndTime != nil {
 			endStr = entry.EndTime.Format("2006-01-02 15:04:05")
 			duration := entry.EndTime.Sub(entry.StartTime)
@@ -709,21 +709,21 @@ func (a *App) showTaskSummary(taskID int64) error {
 			durationStr = fmt.Sprintf("%dh %dm", hours, minutes)
 			status = "Running"
 		}
-		
+
 		fmt.Printf("%-20s %-20s %-15s %s\n", startStr, endStr, durationStr, status)
 	}
 
 	// Print summary footer
 	fmt.Println(strings.Repeat("-", 75))
-	
+
 	// Format total duration
 	totalHours := int(totalDuration.Hours())
 	totalMinutes := int(totalDuration.Minutes()) % 60
-	
+
 	// Format time range
 	earliestStr := earliestStart.Format("2006-01-02 15:04:05")
 	latestStr := latestEnd.Format("2006-01-02 15:04:05")
-	
+
 	fmt.Printf("Total Sessions: %d", len(entries))
 	if runningSessions > 0 {
 		fmt.Printf(" (%d running)", runningSessions)
@@ -731,6 +731,6 @@ func (a *App) showTaskSummary(taskID int64) error {
 	fmt.Printf("\n")
 	fmt.Printf("Time Range: %s to %s\n", earliestStr, latestStr)
 	fmt.Printf("Total Time: %dh %dm\n", totalHours, totalMinutes)
-	
+
 	return nil
-} 
+}
