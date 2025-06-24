@@ -2,11 +2,12 @@ package migrations
 
 import (
 	"database/sql"
-	"fmt"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
+
+	"time-tracker/internal/logging"
 
 	"github.com/stretchr/testify/require"
 	_ "modernc.org/sqlite"
@@ -36,14 +37,14 @@ func TestRFC3339Migration(t *testing.T) {
 	require.NoError(t, err)
 
 	// Show before values
-	fmt.Println("Before migration:")
+	logging.Debugln("Before migration:")
 	rows, err := db.Query("SELECT id, start_time FROM time_entries ORDER BY id")
 	require.NoError(t, err)
 	for rows.Next() {
 		var id int64
 		var startTime string
 		require.NoError(t, rows.Scan(&id, &startTime))
-		fmt.Printf("  ID %d: %s\n", id, startTime)
+		logging.Debugf("  ID %d: %s\n", id, startTime)
 	}
 	rows.Close()
 
@@ -59,7 +60,7 @@ func TestRFC3339Migration(t *testing.T) {
 	require.NoError(t, err)
 
 	// Show after values
-	fmt.Println("After migration:")
+	logging.Debugln("After migration:")
 	rows, err = db.Query("SELECT id, start_time FROM time_entries ORDER BY id")
 	require.NoError(t, err)
 	defer rows.Close()
@@ -69,7 +70,7 @@ func TestRFC3339Migration(t *testing.T) {
 		var id int64
 		var startTime string
 		require.NoError(t, rows.Scan(&id, &startTime))
-		fmt.Printf("  ID %d: %s\n", id, startTime)
+		logging.Debugf("  ID %d: %s\n", id, startTime)
 		require.Truef(t, rfc3339re.MatchString(startTime), "not RFC3339: %s", startTime)
 	}
 }

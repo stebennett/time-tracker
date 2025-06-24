@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"time-tracker/internal/logging"
 )
 
 func init() {
@@ -69,7 +71,7 @@ func Up_000003_update_time_entries_to_rfc3339(tx *sql.Tx) error {
 		if e.startTime.Valid && e.startTime.String != "" {
 			newStartTime, err := parseGoTimeToRFC3339(e.startTime.String)
 			if err != nil {
-				fmt.Printf("Warning: could not parse start_time for id %d: %v\n", e.id, err)
+				logging.Debugf("Warning: could not parse start_time for id %d: %v\n", e.id, err)
 				errors++
 			} else {
 				_, err := startStmt.Exec(newStartTime, e.id)
@@ -84,7 +86,7 @@ func Up_000003_update_time_entries_to_rfc3339(tx *sql.Tx) error {
 		if e.endTime.Valid && e.endTime.String != "" {
 			newEndTime, err := parseGoTimeToRFC3339(e.endTime.String)
 			if err != nil {
-				fmt.Printf("Warning: could not parse end_time for id %d: %v\n", e.id, err)
+				logging.Debugf("Warning: could not parse end_time for id %d: %v\n", e.id, err)
 				errors++
 			} else {
 				_, err := endStmt.Exec(newEndTime, e.id)
@@ -96,7 +98,7 @@ func Up_000003_update_time_entries_to_rfc3339(tx *sql.Tx) error {
 		}
 	}
 
-	fmt.Printf("Migration complete: processed %d rows, updated %d values, encountered %d errors\n", total, updates, errors)
+	logging.Debugf("Migration complete: processed %d rows, updated %d values, encountered %d errors\n", total, updates, errors)
 	return nil
 }
 
@@ -169,6 +171,6 @@ func isRFC3339(timeStr string) bool {
 	// Must have 'T' separator, no space, and timezone offset with colon
 	rfc3339Regex := regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?([+-]\d{2}:\d{2}|Z)$`)
 	result := rfc3339Regex.MatchString(timeStr)
-	fmt.Printf("DEBUG: isRFC3339(%q) = %v\n", timeStr, result)
+	logging.Debugf("DEBUG: isRFC3339(%q) = %v\n", timeStr, result)
 	return result
 }

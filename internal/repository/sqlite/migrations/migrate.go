@@ -10,6 +10,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"time-tracker/internal/logging"
 )
 
 //go:embed *.sql
@@ -72,14 +74,14 @@ func RunMigrations(db *sql.DB) error {
 		if err != nil {
 			// Migration failed, restore from backup
 			if restoreErr := restoreFromBackup(dbPath, backupPath); restoreErr != nil {
-				fmt.Printf("Warning: failed to restore database from backup: %v\n", restoreErr)
+				logging.Debugf("Warning: failed to restore database from backup: %v\n", restoreErr)
 			} else {
-				fmt.Printf("Database restored from backup: %s\n", backupPath)
+				logging.Debugf("Database restored from backup: %s\n", backupPath)
 			}
 		} else {
 			// Migration succeeded, clean up backup and any existing failed backups
 			if cleanupErr := cleanupBackups(dbPath); cleanupErr != nil {
-				fmt.Printf("Warning: failed to cleanup backups: %v\n", cleanupErr)
+				logging.Debugf("Warning: failed to cleanup backups: %v\n", cleanupErr)
 			}
 		}
 	}()
@@ -108,7 +110,7 @@ func RunMigrations(db *sql.DB) error {
 
 	// Apply migrations in order
 	for _, migration := range migrations {
-		fmt.Printf("Applying migration version %d (type: %s)\n", migration.Version, migration.Type)
+		logging.Debugf("Applying migration version %d (type: %s)\n", migration.Version, migration.Type)
 		if !applied[migration.Version] {
 			if err = applyMigration(db, migration); err != nil {
 				// Mark migration as failed (dirty state)
@@ -177,7 +179,7 @@ func createBackup(dbPath string) (string, error) {
 		return "", fmt.Errorf("failed to copy database to backup: %w", err)
 	}
 
-	fmt.Printf("Database backup created: %s\n", backupPath)
+	logging.Debugf("Database backup created: %s\n", backupPath)
 	return backupPath, nil
 }
 
@@ -230,7 +232,7 @@ func cleanupBackups(dbPath string) error {
 		if err := os.Remove(backupFile); err != nil {
 			return fmt.Errorf("failed to remove backup file %s: %w", backupFile, err)
 		}
-		fmt.Printf("Removed backup file: %s\n", backupFile)
+		logging.Debugf("Removed backup file: %s\n", backupFile)
 	}
 
 	return nil
