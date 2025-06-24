@@ -19,7 +19,7 @@ func setupTestDB(t *testing.T) (*SQLiteRepository, func()) {
 
 	// Set up test database path
 	dbPath := filepath.Join(dataDir, "tt.db")
-	
+
 	// Create repository instance
 	repo, err := New(dbPath)
 	require.NoError(t, err)
@@ -304,4 +304,35 @@ func TestSearchTimeEntries(t *testing.T) {
 // Helper function to create string pointer
 func stringPtr(s string) *string {
 	return &s
-} 
+}
+
+func TestTimeFormatting(t *testing.T) {
+	repo, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	// Create a task
+	task := &Task{TaskName: "Test task"}
+	err := repo.CreateTask(task)
+	require.NoError(t, err)
+
+	// Create a time entry with a specific time
+	testTime := time.Date(2025, 6, 23, 11, 47, 24, 890799237, time.UTC)
+	entry := &TimeEntry{
+		StartTime: testTime,
+		TaskID:    task.ID,
+	}
+
+	err = repo.CreateTimeEntry(entry)
+	require.NoError(t, err)
+
+	// Retrieve the entry
+	retrieved, err := repo.GetTimeEntry(entry.ID)
+	require.NoError(t, err)
+
+	// Verify the time is stored correctly
+	expectedRFC3339 := "2025-06-23T11:47:24Z"
+	assert.Equal(t, expectedRFC3339, retrieved.StartTime.Format(time.RFC3339))
+
+	// Verify the time values are equal (ignoring monotonic clock)
+	assert.Equal(t, testTime.Unix(), retrieved.StartTime.Unix())
+}

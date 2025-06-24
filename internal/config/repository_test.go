@@ -114,6 +114,12 @@ func TestRepositoryFactory_CreateRepository(t *testing.T) {
 }
 
 func TestRepositoryFactory_CreateRepository_Development(t *testing.T) {
+	// Clean up any existing tt.db file before the test
+	dbPath := "tt.db"
+	if _, err := os.Stat(dbPath); err == nil {
+		os.Remove(dbPath)
+	}
+
 	factory := NewRepositoryFactory(Development)
 	repo, err := factory.CreateRepository()
 	if err != nil {
@@ -131,6 +137,13 @@ func TestRepositoryFactory_CreateRepository_Development(t *testing.T) {
 	if tasks == nil {
 		t.Error("ListTasks() returned nil")
 	}
+
+	// Clean up the tt.db file after the test
+	defer func() {
+		if _, err := os.Stat(dbPath); err == nil {
+			os.Remove(dbPath)
+		}
+	}()
 }
 
 func TestRepositoryFactory_CreateRepository_Testing(t *testing.T) {
@@ -151,4 +164,4 @@ func TestRepositoryFactory_CreateRepository_Testing(t *testing.T) {
 	if tasks == nil {
 		t.Error("ListTasks() returned nil")
 	}
-} 
+}

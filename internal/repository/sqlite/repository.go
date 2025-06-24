@@ -11,6 +11,19 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+// formatTimeForDB formats a time.Time value as RFC3339 string for consistent database storage
+func formatTimeForDB(t time.Time) string {
+	return t.Format(time.RFC3339)
+}
+
+// formatTimePtrForDB formats a *time.Time value as RFC3339 string, returning nil if the pointer is nil
+func formatTimePtrForDB(t *time.Time) interface{} {
+	if t == nil {
+		return nil
+	}
+	return formatTimeForDB(*t)
+}
+
 // SearchOptions contains all possible search parameters
 type SearchOptions struct {
 	StartTime *time.Time
@@ -76,7 +89,7 @@ func (r *SQLiteRepository) CreateTimeEntry(entry *TimeEntry) error {
 	INSERT INTO time_entries (start_time, end_time, task_id)
 	VALUES (?, ?, ?)`
 
-	result, err := r.db.Exec(query, entry.StartTime, entry.EndTime, entry.TaskID)
+	result, err := r.db.Exec(query, formatTimeForDB(entry.StartTime), formatTimePtrForDB(entry.EndTime), entry.TaskID)
 	if err != nil {
 		return fmt.Errorf("failed to create time entry: %w", err)
 	}
@@ -169,12 +182,7 @@ func (r *SQLiteRepository) UpdateTimeEntry(entry *TimeEntry) error {
 	SET start_time = ?, end_time = ?, task_id = ?
 	WHERE id = ?`
 
-	result, err := r.db.Exec(query,
-		entry.StartTime,
-		entry.EndTime,
-		entry.TaskID,
-		entry.ID,
-	)
+	result, err := r.db.Exec(query, formatTimeForDB(entry.StartTime), formatTimePtrForDB(entry.EndTime), entry.TaskID, entry.ID)
 	if err != nil {
 		return fmt.Errorf("failed to update time entry: %w", err)
 	}
@@ -306,14 +314,14 @@ func (r *SQLiteRepository) SearchTimeEntries(opts SearchOptions) ([]*TimeEntry, 
 		timeCondition := "("
 		if opts.StartTime != nil {
 			timeCondition += "start_time >= ?"
-			args = append(args, *opts.StartTime)
+			args = append(args, formatTimePtrForDB(opts.StartTime))
 		}
 		if opts.StartTime != nil && opts.EndTime != nil {
 			timeCondition += " AND "
 		}
 		if opts.EndTime != nil {
 			timeCondition += "start_time <= ?"
-			args = append(args, *opts.EndTime)
+			args = append(args, formatTimePtrForDB(opts.EndTime))
 		}
 		timeCondition += ")"
 		conditions = append(conditions, timeCondition)
