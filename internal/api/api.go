@@ -19,6 +19,7 @@ type API interface {
 	CreateTimeEntry(taskID int64, startTime time.Time, endTime *time.Time) (*sqlite.TimeEntry, error)
 	GetTimeEntry(id int64) (*sqlite.TimeEntry, error)
 	ListTimeEntries() ([]*sqlite.TimeEntry, error)
+	SearchTimeEntries(opts sqlite.SearchOptions) ([]*sqlite.TimeEntry, error)
 	UpdateTimeEntry(id int64, startTime time.Time, endTime *time.Time, taskID int64) error
 	DeleteTimeEntry(id int64) error
 
@@ -86,6 +87,10 @@ func (a *apiImpl) GetTimeEntry(id int64) (*sqlite.TimeEntry, error) {
 
 func (a *apiImpl) ListTimeEntries() ([]*sqlite.TimeEntry, error) {
 	return a.repo.ListTimeEntries()
+}
+
+func (a *apiImpl) SearchTimeEntries(opts sqlite.SearchOptions) ([]*sqlite.TimeEntry, error) {
+	return a.repo.SearchTimeEntries(opts)
 }
 
 func (a *apiImpl) UpdateTimeEntry(id int64, startTime time.Time, endTime *time.Time, taskID int64) error {

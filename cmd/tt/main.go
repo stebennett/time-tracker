@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"time-tracker/internal/api"
 	"time-tracker/internal/cli"
 	"time-tracker/internal/config"
 	"time-tracker/internal/repository/sqlite"
@@ -13,7 +14,7 @@ func main() {
 	// Create repository factory based on environment
 	env := config.GetEnvironment()
 	factory := config.NewRepositoryFactory(env)
-	
+
 	// Create repository with dependency injection
 	repo, err := factory.CreateRepository()
 	if err != nil {
@@ -22,8 +23,11 @@ func main() {
 	}
 	defer repo.Close()
 
-	// Create app with injected repository
-	app := cli.NewApp(repo)
+	// Create API instance
+	apiInstance := api.New(repo)
+
+	// Create app with injected API
+	app := cli.NewApp(apiInstance)
 
 	if err := app.Run(os.Args[1:]); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -37,7 +41,7 @@ func createRepository() (sqlite.Repository, error) {
 	// For now, we'll use the default SQLite repository
 	// In the future, this could be extended to support different repository types
 	// or different configurations based on environment variables
-	
+
 	// Get database path
 	dbPath, err := cli.GetDatabasePath()
 	if err != nil {
@@ -51,4 +55,4 @@ func createRepository() (sqlite.Repository, error) {
 	}
 
 	return repo, nil
-} 
+}

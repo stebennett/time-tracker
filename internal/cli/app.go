@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"time-tracker/internal/api"
 	"time-tracker/internal/repository/sqlite"
 )
 
@@ -19,7 +20,7 @@ var timeNow = time.Now
 
 // App represents the main CLI application
 type App struct {
-	repo sqlite.Repository
+	api api.API
 }
 
 // GetDatabasePath returns the path to the SQLite database file
@@ -46,9 +47,9 @@ func GetDatabasePath() (string, error) {
 }
 
 // NewApp creates a new CLI application instance with dependency injection
-func NewApp(repo sqlite.Repository) *App {
+func NewApp(api api.API) *App {
 	return &App{
-		repo: repo,
+		api: api,
 	}
 }
 
@@ -67,8 +68,11 @@ func NewAppWithDefaultRepository() (*App, error) {
 		return nil, fmt.Errorf("failed to initialize database: %w", err)
 	}
 
+	// Create API instance
+	apiInstance := api.New(repo)
+
 	return &App{
-		repo: repo,
+		api: apiInstance,
 	}, nil
 }
 
@@ -151,7 +155,7 @@ func (a *App) listTasks(args []string) error {
 
 	// If no arguments, list all tasks
 	if len(args) == 0 {
-		entries, err := a.repo.ListTimeEntries()
+		entries, err := a.api.ListTimeEntries()
 		if err != nil {
 			return fmt.Errorf("failed to list tasks: %w", err)
 		}
@@ -178,7 +182,7 @@ func (a *App) listTasks(args []string) error {
 	}
 
 	// Search for entries
-	entries, err := a.repo.SearchTimeEntries(opts)
+	entries, err := a.api.SearchTimeEntries(opts)
 	if err != nil {
 		return fmt.Errorf("failed to search tasks: %w", err)
 	}
@@ -204,7 +208,7 @@ func (a *App) printEntries(entries []*sqlite.TimeEntry) error {
 	}
 	lastEntryMap := make(map[int64]*lastEntryInfo)
 	for _, entry := range entries {
-		task, err := a.repo.GetTask(entry.TaskID)
+		task, err := a.api.GetTask(entry.TaskID)
 		if err != nil {
 			return fmt.Errorf("failed to get task for entry %d: %w", entry.ID, err)
 		}
@@ -258,7 +262,7 @@ func (a *App) printEntries(entries []*sqlite.TimeEntry) error {
 func (a *App) stopRunningTasks() error {
 	// Search for tasks with no end time
 	opts := sqlite.SearchOptions{}
-	entries, err := a.repo.SearchTimeEntries(opts)
+	entries, err := a.api.SearchTimeEntries(opts)
 	if err != nil {
 		return fmt.Errorf("failed to search for running tasks: %w", err)
 	}
@@ -267,7 +271,7 @@ func (a *App) stopRunningTasks() error {
 	for _, entry := range entries {
 		if entry.EndTime == nil {
 			entry.EndTime = &now
-			if err := a.repo.UpdateTimeEntry(entry); err != nil {
+			if err := a.api.UpdateTimeEntry(entry.ID, entry.StartTime, entry.EndTime, entry.TaskID); err != nil {
 				return fmt.Errorf("failed to update task %d: %w", entry.ID, err)
 			}
 		}
@@ -285,19 +289,15 @@ func (a *App) createNewTask(taskName string) error {
 	}
 
 	// Always create a new task
-	task := &sqlite.Task{TaskName: taskName}
-	if err := a.repo.CreateTask(task); err != nil {
+	task, err := a.api.CreateTask(taskName)
+	if err != nil {
 		return fmt.Errorf("failed to create task: %w", err)
 	}
 
 	// Create new time entry
 	now := timeNow()
-	entry := &sqlite.TimeEntry{
-		StartTime: now,
-		TaskID:    task.ID,
-	}
-
-	if err := a.repo.CreateTimeEntry(entry); err != nil {
+	_, err = a.api.CreateTimeEntry(task.ID, now, nil)
+	if err != nil {
 		return fmt.Errorf("failed to create new task: %w", err)
 	}
 
@@ -309,7 +309,7 @@ func (a *App) createNewTask(taskName string) error {
 func (a *App) showCurrentTask() error {
 	// Search for tasks with no end time
 	opts := sqlite.SearchOptions{}
-	entries, err := a.repo.SearchTimeEntries(opts)
+	entries, err := a.api.SearchTimeEntries(opts)
 	if err != nil {
 		return fmt.Errorf("failed to search for running tasks: %w", err)
 	}
@@ -325,7 +325,7 @@ func (a *App) showCurrentTask() error {
 	hours := int(duration.Hours())
 	minutes := int(duration.Minutes()) % 60
 
-	task, err := a.repo.GetTask(entry.TaskID)
+	task, err := a.api.GetTask(entry.TaskID)
 	if err != nil {
 		return fmt.Errorf("failed to get task for entry %d: %w", entry.ID, err)
 	}
@@ -359,7 +359,7 @@ func (a *App) outputTasks(args []string) error {
 // outputCSV outputs all tasks in CSV format
 func (a *App) outputCSV() error {
 	// Get all tasks
-	entries, err := a.repo.ListTimeEntries()
+	entries, err := a.api.ListTimeEntries()
 	if err != nil {
 		return fmt.Errorf("failed to list tasks: %w", err)
 	}
@@ -387,7 +387,7 @@ func (a *App) outputCSV() error {
 			duration = entry.EndTime.Sub(entry.StartTime).Hours()
 		}
 
-		task, err := a.repo.GetTask(entry.TaskID)
+		task, err := a.api.GetTask(entry.TaskID)
 		if err != nil {
 			return fmt.Errorf("failed to get task for entry %d: %w", entry.ID, err)
 		}
@@ -426,7 +426,7 @@ func (a *App) resumeTask(args []string) error {
 
 	// Find all time entries in the period, most recent first
 	opts := sqlite.SearchOptions{StartTime: &startTime, EndTime: &now}
-	entries, err := a.repo.SearchTimeEntries(opts)
+	entries, err := a.api.SearchTimeEntries(opts)
 	if err != nil {
 		return fmt.Errorf("failed to search time entries: %w", err)
 	}
@@ -456,7 +456,7 @@ func (a *App) resumeTask(args []string) error {
 
 	fmt.Println("Select a task to resume:")
 	for i, id := range taskIDs {
-		task, _ := a.repo.GetTask(id)
+		task, _ := a.api.GetTask(id)
 		last := taskMap[id].StartTime.Format("2006-01-02 15:04:05")
 		fmt.Printf("%d. %s (last worked: %s)\n", i+1, task.TaskName, last)
 	}
@@ -481,14 +481,11 @@ func (a *App) resumeTask(args []string) error {
 	}
 
 	// Create a new time entry for the selected task
-	entry := &sqlite.TimeEntry{
-		StartTime: timeNow(),
-		TaskID:    selectedTaskID,
-	}
-	if err := a.repo.CreateTimeEntry(entry); err != nil {
+	_, err = a.api.CreateTimeEntry(selectedTaskID, timeNow(), nil)
+	if err != nil {
 		return fmt.Errorf("failed to resume task: %w", err)
 	}
-	task, _ := a.repo.GetTask(selectedTaskID)
+	task, _ := a.api.GetTask(selectedTaskID)
 	fmt.Printf("Resumed task: %s\n", task.TaskName)
 	return nil
 }
@@ -530,7 +527,7 @@ func (a *App) summaryTask(args []string) error {
 			timeFilterOpts.TaskName = &searchText
 		}
 
-		timeFilterEntries, err := a.repo.SearchTimeEntries(timeFilterOpts)
+		timeFilterEntries, err := a.api.SearchTimeEntries(timeFilterOpts)
 		if err != nil {
 			return fmt.Errorf("failed to search time entries: %w", err)
 		}
@@ -551,7 +548,7 @@ func (a *App) summaryTask(args []string) error {
 			TaskName: &searchText,
 		}
 
-		textFilterEntries, err := a.repo.SearchTimeEntries(textFilterOpts)
+		textFilterEntries, err := a.api.SearchTimeEntries(textFilterOpts)
 		if err != nil {
 			return fmt.Errorf("failed to search time entries: %w", err)
 		}
@@ -568,7 +565,7 @@ func (a *App) summaryTask(args []string) error {
 		}
 	} else {
 		// No filters, get all tasks
-		allEntries, err := a.repo.ListTimeEntries()
+		allEntries, err := a.api.ListTimeEntries()
 		if err != nil {
 			return fmt.Errorf("failed to list time entries: %w", err)
 		}
@@ -592,8 +589,8 @@ func (a *App) summaryTask(args []string) error {
 
 	// Sort task IDs by task name for consistent ordering
 	sort.Slice(matchingTaskIDs, func(i, j int) bool {
-		taskI, _ := a.repo.GetTask(matchingTaskIDs[i])
-		taskJ, _ := a.repo.GetTask(matchingTaskIDs[j])
+		taskI, _ := a.api.GetTask(matchingTaskIDs[i])
+		taskJ, _ := a.api.GetTask(matchingTaskIDs[j])
 		return taskI.TaskName < taskJ.TaskName
 	})
 
@@ -605,7 +602,7 @@ func (a *App) summaryTask(args []string) error {
 	// Multiple tasks found, let user choose
 	fmt.Println("Select a task to summarize:")
 	for i, taskID := range matchingTaskIDs {
-		task, _ := a.repo.GetTask(taskID)
+		task, _ := a.api.GetTask(taskID)
 		fmt.Printf("%d. %s\n", i+1, task.TaskName)
 	}
 	fmt.Print("Enter number to summarize, or 'q' to quit: ")
@@ -629,14 +626,14 @@ func (a *App) summaryTask(args []string) error {
 // showTaskSummary displays a detailed summary for a specific task
 func (a *App) showTaskSummary(taskID int64) error {
 	// Get task details
-	task, err := a.repo.GetTask(taskID)
+	task, err := a.api.GetTask(taskID)
 	if err != nil {
 		return fmt.Errorf("failed to get task: %w", err)
 	}
 
 	// Get all time entries for this task
 	opts := sqlite.SearchOptions{TaskID: &taskID}
-	entries, err := a.repo.SearchTimeEntries(opts)
+	entries, err := a.api.SearchTimeEntries(opts)
 	if err != nil {
 		return fmt.Errorf("failed to get time entries: %w", err)
 	}
@@ -768,7 +765,7 @@ func (a *App) deleteTask(args []string) error {
 		opts.TaskName = &filterText
 	}
 
-	entries, err := a.repo.SearchTimeEntries(opts)
+	entries, err := a.api.SearchTimeEntries(opts)
 	if err != nil {
 		return fmt.Errorf("failed to search time entries: %w", err)
 	}
@@ -801,7 +798,7 @@ func (a *App) deleteTask(args []string) error {
 
 	fmt.Println("Select a task to delete:")
 	for i, id := range taskIDs {
-		task, _ := a.repo.GetTask(id)
+		task, _ := a.api.GetTask(id)
 		last := taskMap[id].StartTime.Format("2006-01-02 15:04:05")
 		fmt.Printf("%d. %s (last worked: %s)\n", i+1, task.TaskName, last)
 	}
@@ -819,23 +816,23 @@ func (a *App) deleteTask(args []string) error {
 		return fmt.Errorf("invalid selection")
 	}
 	selectedTaskID := taskIDs[idx-1]
-	task, _ := a.repo.GetTask(selectedTaskID)
+	task, _ := a.api.GetTask(selectedTaskID)
 
 	// Delete all time entries for the task
 	entryOpts := sqlite.SearchOptions{TaskID: &selectedTaskID}
-	allEntries, err := a.repo.SearchTimeEntries(entryOpts)
+	allEntries, err := a.api.SearchTimeEntries(entryOpts)
 	if err != nil {
 		return fmt.Errorf("failed to get time entries for task: %w", err)
 	}
 	for _, entry := range allEntries {
-		err := a.repo.DeleteTimeEntry(entry.ID)
+		err := a.api.DeleteTimeEntry(entry.ID)
 		if err != nil {
 			return fmt.Errorf("failed to delete time entry %d: %w", entry.ID, err)
 		}
 	}
 
 	// Delete the task itself
-	if err := a.repo.DeleteTask(selectedTaskID); err != nil {
+	if err := a.api.DeleteTask(selectedTaskID); err != nil {
 		return fmt.Errorf("failed to delete task: %w", err)
 	}
 

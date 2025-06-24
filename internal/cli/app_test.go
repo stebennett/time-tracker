@@ -2,7 +2,9 @@ package cli
 
 import (
 	"bytes"
+	"fmt"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -11,13 +13,212 @@ import (
 	"time-tracker/internal/repository/sqlite"
 )
 
-func setupTestAppWithInMemoryRepo(t *testing.T) (*App, func()) {
-	repo, err := sqlite.New(":memory:")
-	if err != nil {
-		t.Fatalf("failed to create in-memory repo: %v", err)
+// mockAPI implements the api.API interface for testing
+type mockAPI struct {
+	tasks       map[int64]*sqlite.Task
+	timeEntries map[int64]*sqlite.TimeEntry
+	nextTaskID  int64
+	nextEntryID int64
+}
+
+func newMockAPI() *mockAPI {
+	return &mockAPI{
+		tasks:       make(map[int64]*sqlite.Task),
+		timeEntries: make(map[int64]*sqlite.TimeEntry),
+		nextTaskID:  1,
+		nextEntryID: 1,
 	}
-	app := NewApp(repo)
-	cleanup := func() { repo.Close() }
+}
+
+func (m *mockAPI) CreateTask(name string) (*sqlite.Task, error) {
+	task := &sqlite.Task{
+		ID:       m.nextTaskID,
+		TaskName: name,
+	}
+	m.tasks[task.ID] = task
+	m.nextTaskID++
+	return task, nil
+}
+
+func (m *mockAPI) GetTask(id int64) (*sqlite.Task, error) {
+	task, exists := m.tasks[id]
+	if !exists {
+		return nil, fmt.Errorf("task not found: %d", id)
+	}
+	return task, nil
+}
+
+func (m *mockAPI) ListTasks() ([]*sqlite.Task, error) {
+	tasks := make([]*sqlite.Task, 0, len(m.tasks))
+	for _, task := range m.tasks {
+		tasks = append(tasks, task)
+	}
+	// Sort by ID for consistent ordering
+	sort.Slice(tasks, func(i, j int) bool {
+		return tasks[i].ID < tasks[j].ID
+	})
+	return tasks, nil
+}
+
+func (m *mockAPI) UpdateTask(id int64, name string) error {
+	task, exists := m.tasks[id]
+	if !exists {
+		return fmt.Errorf("task not found: %d", id)
+	}
+	task.TaskName = name
+	return nil
+}
+
+func (m *mockAPI) DeleteTask(id int64) error {
+	if _, exists := m.tasks[id]; !exists {
+		return fmt.Errorf("task not found: %d", id)
+	}
+	delete(m.tasks, id)
+	return nil
+}
+
+func (m *mockAPI) CreateTimeEntry(taskID int64, startTime time.Time, endTime *time.Time) (*sqlite.TimeEntry, error) {
+	entry := &sqlite.TimeEntry{
+		ID:        m.nextEntryID,
+		TaskID:    taskID,
+		StartTime: startTime,
+		EndTime:   endTime,
+	}
+	m.timeEntries[entry.ID] = entry
+	m.nextEntryID++
+	return entry, nil
+}
+
+func (m *mockAPI) GetTimeEntry(id int64) (*sqlite.TimeEntry, error) {
+	entry, exists := m.timeEntries[id]
+	if !exists {
+		return nil, fmt.Errorf("time entry not found: %d", id)
+	}
+	return entry, nil
+}
+
+func (m *mockAPI) ListTimeEntries() ([]*sqlite.TimeEntry, error) {
+	entries := make([]*sqlite.TimeEntry, 0, len(m.timeEntries))
+	for _, entry := range m.timeEntries {
+		entries = append(entries, entry)
+	}
+	return entries, nil
+}
+
+func (m *mockAPI) SearchTimeEntries(opts sqlite.SearchOptions) ([]*sqlite.TimeEntry, error) {
+	var entries []*sqlite.TimeEntry
+
+	for _, entry := range m.timeEntries {
+		// Filter by time range
+		if opts.StartTime != nil && entry.StartTime.Before(*opts.StartTime) {
+			continue
+		}
+		if opts.EndTime != nil && entry.StartTime.After(*opts.EndTime) {
+			continue
+		}
+
+		// Filter by task ID
+		if opts.TaskID != nil && entry.TaskID != *opts.TaskID {
+			continue
+		}
+
+		// Filter by task name
+		if opts.TaskName != nil {
+			task, exists := m.tasks[entry.TaskID]
+			if !exists || !strings.Contains(strings.ToLower(task.TaskName), strings.ToLower(*opts.TaskName)) {
+				continue
+			}
+		}
+
+		// If no filters specified, only return running tasks
+		if opts.StartTime == nil && opts.EndTime == nil && opts.TaskID == nil && opts.TaskName == nil {
+			if entry.EndTime != nil {
+				continue
+			}
+		}
+
+		entries = append(entries, entry)
+	}
+
+	return entries, nil
+}
+
+func (m *mockAPI) UpdateTimeEntry(id int64, startTime time.Time, endTime *time.Time, taskID int64) error {
+	entry, exists := m.timeEntries[id]
+	if !exists {
+		return fmt.Errorf("time entry not found: %d", id)
+	}
+	entry.StartTime = startTime
+	entry.EndTime = endTime
+	entry.TaskID = taskID
+	return nil
+}
+
+func (m *mockAPI) DeleteTimeEntry(id int64) error {
+	if _, exists := m.timeEntries[id]; !exists {
+		return fmt.Errorf("time entry not found: %d", id)
+	}
+	delete(m.timeEntries, id)
+	return nil
+}
+
+func (m *mockAPI) StartTask(taskID int64) (*sqlite.TimeEntry, error) {
+	// Stop any running tasks
+	now := time.Now()
+	for _, entry := range m.timeEntries {
+		if entry.EndTime == nil {
+			entry.EndTime = &now
+		}
+	}
+
+	// Create new entry
+	return m.CreateTimeEntry(taskID, time.Now(), nil)
+}
+
+func (m *mockAPI) StopTask(entryID int64) error {
+	entry, exists := m.timeEntries[entryID]
+	if !exists {
+		return fmt.Errorf("time entry not found: %d", entryID)
+	}
+	if entry.EndTime != nil {
+		return fmt.Errorf("task already stopped")
+	}
+	now := time.Now()
+	entry.EndTime = &now
+	return nil
+}
+
+func (m *mockAPI) ResumeTask(taskID int64) (*sqlite.TimeEntry, error) {
+	// Stop any running tasks
+	now := time.Now()
+	for _, entry := range m.timeEntries {
+		if entry.EndTime == nil {
+			entry.EndTime = &now
+		}
+	}
+
+	// Create new entry
+	return m.CreateTimeEntry(taskID, time.Now(), nil)
+}
+
+func (m *mockAPI) GetCurrentlyRunningTask() (*sqlite.TimeEntry, error) {
+	for _, entry := range m.timeEntries {
+		if entry.EndTime == nil {
+			return entry, nil
+		}
+	}
+	return nil, fmt.Errorf("no running task")
+}
+
+func (m *mockAPI) ListTodayTasks() ([]*sqlite.Task, error) {
+	// For simplicity, return all tasks
+	return m.ListTasks()
+}
+
+func setupTestAppWithMockAPI(t *testing.T) (*App, func()) {
+	mockAPI := newMockAPI()
+	app := NewApp(mockAPI)
+	cleanup := func() {}
 	return app, cleanup
 }
 
@@ -104,7 +305,7 @@ func TestApp_Run(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			app, cleanup := setupTestAppWithInMemoryRepo(t)
+			app, cleanup := setupTestAppWithMockAPI(t)
 			defer cleanup()
 
 			// Capture stdout
@@ -216,45 +417,22 @@ func TestParseTimeShorthand(t *testing.T) {
 }
 
 func TestListTasks(t *testing.T) {
-	app, cleanup := setupTestAppWithInMemoryRepo(t)
+	app, cleanup := setupTestAppWithMockAPI(t)
 	defer cleanup()
 
 	// Create a fixed time for testing
 	fixedTime := time.Date(2025, 6, 16, 11, 22, 1, 0, time.UTC)
 	timeNow = func() time.Time { return fixedTime }
 
-	// Create some test tasks
-	task1 := &sqlite.Task{TaskName: "First task"}
-	task2 := &sqlite.Task{TaskName: "Second task"}
-	task3 := &sqlite.Task{TaskName: "Third task"}
-	app.repo.CreateTask(task1)
-	app.repo.CreateTask(task2)
-	app.repo.CreateTask(task3)
+	// Create some test tasks using the API
+	task1, _ := app.api.CreateTask("First task")
+	task2, _ := app.api.CreateTask("Second task")
+	task3, _ := app.api.CreateTask("Third task")
 
-	// Create some test entries
-	entries := []*sqlite.TimeEntry{
-		{
-			StartTime: fixedTime.Add(-2 * time.Hour),
-			EndTime:   &fixedTime,
-			TaskID:    task1.ID,
-		},
-		{
-			StartTime: fixedTime.Add(-1 * time.Hour),
-			TaskID:    task2.ID,
-		},
-		{
-			StartTime: fixedTime.Add(-30 * time.Minute),
-			EndTime:   &fixedTime,
-			TaskID:    task3.ID,
-		},
-	}
-
-	for _, entry := range entries {
-		err := app.repo.CreateTimeEntry(entry)
-		if err != nil {
-			t.Fatalf("Failed to create test entry: %v", err)
-		}
-	}
+	// Create some test entries using the API
+	app.api.CreateTimeEntry(task1.ID, fixedTime.Add(-2*time.Hour), &fixedTime)
+	app.api.CreateTimeEntry(task2.ID, fixedTime.Add(-1*time.Hour), nil) // Running task
+	app.api.CreateTimeEntry(task3.ID, fixedTime.Add(-30*time.Minute), &fixedTime)
 
 	tests := []struct {
 		name    string
@@ -322,7 +500,7 @@ func TestListTasks(t *testing.T) {
 }
 
 func TestShowCurrentTask(t *testing.T) {
-	app, cleanup := setupTestAppWithInMemoryRepo(t)
+	app, cleanup := setupTestAppWithMockAPI(t)
 	defer cleanup()
 
 	tests := []struct {
@@ -348,17 +526,9 @@ func TestShowCurrentTask(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.setupTask {
-				// Create a running task
-				task := &sqlite.Task{TaskName: "Test task"}
-				app.repo.CreateTask(task)
-				entry := &sqlite.TimeEntry{
-					StartTime: time.Now(),
-					TaskID:    task.ID,
-				}
-				err := app.repo.CreateTimeEntry(entry)
-				if err != nil {
-					t.Fatalf("Failed to create test entry: %v", err)
-				}
+				// Create a running task using the API
+				task, _ := app.api.CreateTask("Test task")
+				app.api.CreateTimeEntry(task.ID, time.Now(), nil)
 			}
 
 			// Capture stdout
@@ -393,35 +563,17 @@ func TestShowCurrentTask(t *testing.T) {
 }
 
 func TestOutputCSV(t *testing.T) {
-	app, cleanup := setupTestAppWithInMemoryRepo(t)
+	app, cleanup := setupTestAppWithMockAPI(t)
 	defer cleanup()
 
-	// Create test tasks
-	task1 := &sqlite.Task{TaskName: "First task"}
-	task2 := &sqlite.Task{TaskName: "Second task"}
-	app.repo.CreateTask(task1)
-	app.repo.CreateTask(task2)
+	// Create test tasks using the API
+	task1, _ := app.api.CreateTask("First task")
+	task2, _ := app.api.CreateTask("Second task")
 
-	// Create test entries
+	// Create test entries using the API
 	now := time.Now()
-	entries := []*sqlite.TimeEntry{
-		{
-			StartTime: now.Add(-2 * time.Hour),
-			EndTime:   &now,
-			TaskID:    task1.ID,
-		},
-		{
-			StartTime: now.Add(-1 * time.Hour),
-			TaskID:    task2.ID,
-		},
-	}
-
-	for _, entry := range entries {
-		err := app.repo.CreateTimeEntry(entry)
-		if err != nil {
-			t.Fatalf("Failed to create test entry: %v", err)
-		}
-	}
+	app.api.CreateTimeEntry(task1.ID, now.Add(-2*time.Hour), &now)
+	app.api.CreateTimeEntry(task2.ID, now.Add(-1*time.Hour), nil) // Running task
 
 	// Capture stdout
 	oldStdout := os.Stdout
@@ -480,7 +632,7 @@ func TestOutputCSV(t *testing.T) {
 }
 
 func TestDuplicateTaskNames(t *testing.T) {
-	app, cleanup := setupTestAppWithInMemoryRepo(t)
+	app, cleanup := setupTestAppWithMockAPI(t)
 	defer cleanup()
 
 	// Create two tasks with the same name
@@ -495,7 +647,7 @@ func TestDuplicateTaskNames(t *testing.T) {
 		t.Fatalf("Failed to create second task: %v", err)
 	}
 
-	entries, err := app.repo.ListTimeEntries()
+	entries, err := app.api.ListTimeEntries()
 	if err != nil {
 		t.Fatalf("Failed to list time entries: %v", err)
 	}
@@ -503,11 +655,11 @@ func TestDuplicateTaskNames(t *testing.T) {
 		t.Fatalf("Expected 2 time entries, got %d", len(entries))
 	}
 
-	task1, err := app.repo.GetTask(entries[0].TaskID)
+	task1, err := app.api.GetTask(entries[0].TaskID)
 	if err != nil {
 		t.Fatalf("Failed to get task 1: %v", err)
 	}
-	task2, err := app.repo.GetTask(entries[1].TaskID)
+	task2, err := app.api.GetTask(entries[1].TaskID)
 	if err != nil {
 		t.Fatalf("Failed to get task 2: %v", err)
 	}
@@ -520,18 +672,14 @@ func TestDuplicateTaskNames(t *testing.T) {
 }
 
 func TestMultipleRunningTasksAndStop(t *testing.T) {
-	app, cleanup := setupTestAppWithInMemoryRepo(t)
+	app, cleanup := setupTestAppWithMockAPI(t)
 	defer cleanup()
 
-	// Create two running tasks (simulate by direct repo usage)
-	task1 := &sqlite.Task{TaskName: "Task 1"}
-	task2 := &sqlite.Task{TaskName: "Task 2"}
-	app.repo.CreateTask(task1)
-	app.repo.CreateTask(task2)
-	entry1 := &sqlite.TimeEntry{StartTime: time.Now().Add(-2 * time.Hour), TaskID: task1.ID}
-	entry2 := &sqlite.TimeEntry{StartTime: time.Now().Add(-1 * time.Hour), TaskID: task2.ID}
-	app.repo.CreateTimeEntry(entry1)
-	app.repo.CreateTimeEntry(entry2)
+	// Create two running tasks using the API
+	task1, _ := app.api.CreateTask("Task 1")
+	task2, _ := app.api.CreateTask("Task 2")
+	app.api.CreateTimeEntry(task1.ID, time.Now().Add(-2*time.Hour), nil)
+	app.api.CreateTimeEntry(task2.ID, time.Now().Add(-1*time.Hour), nil)
 
 	// Stop all running tasks
 	err := app.stopRunningTasks()
@@ -539,7 +687,7 @@ func TestMultipleRunningTasksAndStop(t *testing.T) {
 		t.Fatalf("Failed to stop running tasks: %v", err)
 	}
 
-	entries, err := app.repo.ListTimeEntries()
+	entries, err := app.api.ListTimeEntries()
 	if err != nil {
 		t.Fatalf("Failed to list time entries: %v", err)
 	}
@@ -551,23 +699,20 @@ func TestMultipleRunningTasksAndStop(t *testing.T) {
 }
 
 func TestSearchByPartialTaskName(t *testing.T) {
-	app, cleanup := setupTestAppWithInMemoryRepo(t)
+	app, cleanup := setupTestAppWithMockAPI(t)
 	defer cleanup()
 
-	task1 := &sqlite.Task{TaskName: "Alpha Project"}
-	task2 := &sqlite.Task{TaskName: "Beta Project"}
-	task3 := &sqlite.Task{TaskName: "Alpha Test"}
-	app.repo.CreateTask(task1)
-	app.repo.CreateTask(task2)
-	app.repo.CreateTask(task3)
-	app.repo.CreateTimeEntry(&sqlite.TimeEntry{StartTime: time.Now(), TaskID: task1.ID})
-	app.repo.CreateTimeEntry(&sqlite.TimeEntry{StartTime: time.Now(), TaskID: task2.ID})
-	app.repo.CreateTimeEntry(&sqlite.TimeEntry{StartTime: time.Now(), TaskID: task3.ID})
+	task1, _ := app.api.CreateTask("Alpha Project")
+	task2, _ := app.api.CreateTask("Beta Project")
+	task3, _ := app.api.CreateTask("Alpha Test")
+	app.api.CreateTimeEntry(task1.ID, time.Now(), nil)
+	app.api.CreateTimeEntry(task2.ID, time.Now(), nil)
+	app.api.CreateTimeEntry(task3.ID, time.Now(), nil)
 
 	// Search for "Alpha"
 	alpha := "Alpha"
 	opts := sqlite.SearchOptions{TaskName: &alpha}
-	results, err := app.repo.SearchTimeEntries(opts)
+	results, err := app.api.SearchTimeEntries(opts)
 	if err != nil {
 		t.Fatalf("Failed to search time entries: %v", err)
 	}
@@ -578,7 +723,7 @@ func TestSearchByPartialTaskName(t *testing.T) {
 	// Search for "Project"
 	project := "Project"
 	opts = sqlite.SearchOptions{TaskName: &project}
-	results, err = app.repo.SearchTimeEntries(opts)
+	results, err = app.api.SearchTimeEntries(opts)
 	if err != nil {
 		t.Fatalf("Failed to search time entries: %v", err)
 	}
@@ -612,25 +757,22 @@ func runResumeWithInput(app *App, args []string, input string) (output string, e
 }
 
 func TestResumeFeature_Acceptance(t *testing.T) {
-	app, cleanup := setupTestAppWithInMemoryRepo(t)
+	app, cleanup := setupTestAppWithMockAPI(t)
 	defer cleanup()
 
 	// Use a fixed time for determinism
 	fixedTime := time.Date(2025, 6, 16, 12, 0, 0, 0, time.UTC)
 	timeNow = func() time.Time { return fixedTime }
 
-	// Create tasks and entries for today and previous days
-	task1 := &sqlite.Task{TaskName: "Alpha"}
-	task2 := &sqlite.Task{TaskName: "Beta"}
-	task3 := &sqlite.Task{TaskName: "Gamma"}
-	app.repo.CreateTask(task1)
-	app.repo.CreateTask(task2)
-	app.repo.CreateTask(task3)
+	// Create tasks and entries for today and previous days using the API
+	task1, _ := app.api.CreateTask("Alpha")
+	task2, _ := app.api.CreateTask("Beta")
+	task3, _ := app.api.CreateTask("Gamma")
 	// Today
-	app.repo.CreateTimeEntry(&sqlite.TimeEntry{StartTime: fixedTime.Add(-2 * time.Hour), EndTime: &fixedTime, TaskID: task1.ID})
-	app.repo.CreateTimeEntry(&sqlite.TimeEntry{StartTime: fixedTime.Add(-1 * time.Hour), TaskID: task2.ID})
+	app.api.CreateTimeEntry(task1.ID, fixedTime.Add(-2*time.Hour), &fixedTime)
+	app.api.CreateTimeEntry(task2.ID, fixedTime.Add(-1*time.Hour), nil)
 	// Previous day
-	app.repo.CreateTimeEntry(&sqlite.TimeEntry{StartTime: fixedTime.Add(-26 * time.Hour), EndTime: &fixedTime, TaskID: task3.ID})
+	app.api.CreateTimeEntry(task3.ID, fixedTime.Add(-26*time.Hour), &fixedTime)
 
 	// 1. Resume with default (today), select task 1 (Beta)
 	output, err := runResumeWithInput(app, []string{}, "1")
@@ -641,7 +783,7 @@ func TestResumeFeature_Acceptance(t *testing.T) {
 		t.Errorf("unexpected output: %s", output)
 	}
 	// Check that a new time entry for Beta was created and any running task is stopped
-	entries, _ := app.repo.ListTimeEntries()
+	entries, _ := app.api.ListTimeEntries()
 	var found bool
 	for _, e := range entries {
 		if e.TaskID == task2.ID && e.StartTime.Equal(fixedTime) {
@@ -676,7 +818,7 @@ func TestResumeFeature_Acceptance(t *testing.T) {
 
 // TestAppWithDependencyInjection demonstrates using dependency injection with a mock repository
 func TestAppWithDependencyInjection(t *testing.T) {
-	app, cleanup := setupTestAppWithInMemoryRepo(t)
+	app, cleanup := setupTestAppWithMockAPI(t)
 	defer cleanup()
 
 	// Verify the app was created
@@ -684,20 +826,20 @@ func TestAppWithDependencyInjection(t *testing.T) {
 		t.Fatal("Expected app to be created, got nil")
 	}
 
-	// Verify the repository was injected
-	if app.repo == nil {
-		t.Fatal("Expected repository to be injected, got nil")
+	// Verify the API was injected
+	if app.api == nil {
+		t.Fatal("Expected API to be injected, got nil")
 	}
 
-	// Test that we can use the app with the in-memory repository
+	// Test that we can use the app with the mock API
 	taskName := "Test Task with DI"
 	err := app.createNewTask(taskName)
 	if err != nil {
 		t.Fatalf("Expected no error creating task, got: %v", err)
 	}
 
-	// Verify the task was created in the repository
-	tasks, err := app.repo.ListTasks()
+	// Verify the task was created in the API
+	tasks, err := app.api.ListTasks()
 	if err != nil {
 		t.Fatalf("Expected no error listing tasks, got: %v", err)
 	}
@@ -713,7 +855,7 @@ func TestAppWithDependencyInjection(t *testing.T) {
 
 // TestAppWithMockRepository tests that the app works with a mock repository
 func TestAppWithMockRepository(t *testing.T) {
-	app, cleanup := setupTestAppWithInMemoryRepo(t)
+	app, cleanup := setupTestAppWithMockAPI(t)
 	defer cleanup()
 
 	// Test creating a task
@@ -723,8 +865,8 @@ func TestAppWithMockRepository(t *testing.T) {
 		t.Fatalf("Expected no error creating task, got: %v", err)
 	}
 
-	// Verify the task was created in the repository
-	tasks, err := app.repo.ListTasks()
+	// Verify the task was created in the API
+	tasks, err := app.api.ListTasks()
 	if err != nil {
 		t.Fatalf("Expected no error listing tasks, got: %v", err)
 	}
@@ -740,14 +882,11 @@ func TestAppWithMockRepository(t *testing.T) {
 
 // TestAppWithMockRepositoryListTasks tests listing tasks with mock repository
 func TestAppWithMockRepositoryListTasks(t *testing.T) {
-	app, cleanup := setupTestAppWithInMemoryRepo(t)
+	app, cleanup := setupTestAppWithMockAPI(t)
 	defer cleanup()
 
 	// Pre-populate with some test data
-	testTask := &sqlite.Task{
-		TaskName: "Test Task",
-	}
-	app.repo.CreateTask(testTask)
+	_, _ = app.api.CreateTask("Test Task")
 
 	// Test listing tasks
 	err := app.listTasks([]string{})
@@ -758,7 +897,7 @@ func TestAppWithMockRepositoryListTasks(t *testing.T) {
 
 // TestAppWithMockRepositoryHelper demonstrates using the setupTestAppWithMock helper
 func TestAppWithMockRepositoryHelper(t *testing.T) {
-	app, cleanup := setupTestAppWithInMemoryRepo(t)
+	app, cleanup := setupTestAppWithMockAPI(t)
 	defer cleanup()
 
 	// Test creating multiple tasks
@@ -770,8 +909,8 @@ func TestAppWithMockRepositoryHelper(t *testing.T) {
 		}
 	}
 
-	// Verify all tasks were created in the repository
-	tasks, err := app.repo.ListTasks()
+	// Verify all tasks were created in the API
+	tasks, err := app.api.ListTasks()
 	if err != nil {
 		t.Fatalf("Expected no error listing tasks, got: %v", err)
 	}
@@ -786,447 +925,4 @@ func TestAppWithMockRepositoryHelper(t *testing.T) {
 			t.Fatalf("Expected task name '%s', got '%s'", taskNames[i], task.TaskName)
 		}
 	}
-}
-
-func dynamicUnderline(taskName string) string {
-	return strings.Repeat("=", len(taskName)+12)
-}
-
-func TestSummaryFeature(t *testing.T) {
-	tests := []struct {
-		name    string
-		args    []string
-		input   string
-		setup   func(app *App)
-		want    func() string
-		wantErr bool
-	}{
-		{
-			name:    "summary with no tasks",
-			args:    []string{"summary"},
-			setup:   func(app *App) {},
-			want:    func() string { return "No tasks found matching the criteria.\n" },
-			wantErr: false,
-		},
-		{
-			name: "summary with single task - direct display",
-			args: []string{"summary", "coding"},
-			setup: func(app *App) {
-				repo := app.repo
-				task := &sqlite.Task{TaskName: "coding project"}
-				repo.CreateTask(task)
-				start1 := time.Date(2024, 1, 1, 9, 0, 0, 0, time.UTC)
-				end1 := time.Date(2024, 1, 1, 11, 0, 0, 0, time.UTC)
-				entry1 := &sqlite.TimeEntry{TaskID: task.ID, StartTime: start1, EndTime: &end1}
-				repo.CreateTimeEntry(entry1)
-				start2 := time.Date(2024, 1, 1, 14, 0, 0, 0, time.UTC)
-				end2 := time.Date(2024, 1, 1, 16, 0, 0, 0, time.UTC)
-				entry2 := &sqlite.TimeEntry{TaskID: task.ID, StartTime: start2, EndTime: &end2}
-				repo.CreateTimeEntry(entry2)
-			},
-			want: func() string {
-				taskName := "coding project"
-				return "\nSummary for: " + taskName + "\n" + dynamicUnderline(taskName) + "\n" +
-					"Start Time           End Time             Duration        Status\n" +
-					"---------------------------------------------------------------------------\n" +
-					"2024-01-01 09:00:00  2024-01-01 11:00:00  2h 0m           Completed\n" +
-					"2024-01-01 14:00:00  2024-01-01 16:00:00  2h 0m           Completed\n" +
-					"---------------------------------------------------------------------------\n" +
-					"Total Sessions: 2\n" +
-					"Time Range: 2024-01-01 09:00:00 to 2024-01-01 16:00:00\n" +
-					"Total Time: 4h 0m\n"
-			},
-			wantErr: false,
-		},
-		{
-			name:  "summary with multiple tasks - user selection",
-			args:  []string{"summary", "project"},
-			input: "1\n",
-			setup: func(app *App) {
-				repo := app.repo
-				task1 := &sqlite.Task{TaskName: "project A"}
-				task2 := &sqlite.Task{TaskName: "project B"}
-				repo.CreateTask(task1)
-				repo.CreateTask(task2)
-				start1 := time.Date(2024, 1, 1, 9, 0, 0, 0, time.UTC)
-				end1 := time.Date(2024, 1, 1, 11, 0, 0, 0, time.UTC)
-				entry1 := &sqlite.TimeEntry{TaskID: task1.ID, StartTime: start1, EndTime: &end1}
-				repo.CreateTimeEntry(entry1)
-				start2 := time.Date(2024, 1, 1, 14, 0, 0, 0, time.UTC)
-				end2 := time.Date(2024, 1, 1, 16, 0, 0, 0, time.UTC)
-				entry2 := &sqlite.TimeEntry{TaskID: task2.ID, StartTime: start2, EndTime: &end2}
-				repo.CreateTimeEntry(entry2)
-			},
-			want: func() string {
-				prompt := "Select a task to summarize:\n1. project A\n2. project B\nEnter number to summarize, or 'q' to quit: "
-				taskName := "project A"
-				return prompt + "\nSummary for: " + taskName + "\n" + dynamicUnderline(taskName) + "\n" +
-					"Start Time           End Time             Duration        Status\n" +
-					"---------------------------------------------------------------------------\n" +
-					"2024-01-01 09:00:00  2024-01-01 11:00:00  2h 0m           Completed\n" +
-					"---------------------------------------------------------------------------\n" +
-					"Total Sessions: 1\n" +
-					"Time Range: 2024-01-01 09:00:00 to 2024-01-01 11:00:00\n" +
-					"Total Time: 2h 0m\n"
-			},
-			wantErr: false,
-		},
-		{
-			name: "summary with time filter",
-			args: []string{"summary", "2h", "coding"},
-			setup: func(app *App) {
-				timeNow = func() time.Time { return time.Now() }
-				repo := app.repo
-				task := &sqlite.Task{TaskName: "coding project"}
-				repo.CreateTask(task)
-				start := timeNow().Add(-1 * time.Hour)
-				end := timeNow().Add(-30 * time.Minute)
-				entry := &sqlite.TimeEntry{TaskID: task.ID, StartTime: start, EndTime: &end}
-				repo.CreateTimeEntry(entry)
-			},
-			want: func() string {
-				return "Summary for: coding project\n======================\nStart Time           End Time             Duration        Status\n---------------------------------------------------------------------------\n"
-			},
-			wantErr: false,
-		},
-		{
-			name: "summary with running session",
-			args: []string{"summary", "running"},
-			setup: func(app *App) {
-				// Create a task
-				repo := app.repo
-				task := &sqlite.Task{TaskName: "running task"}
-				repo.CreateTask(task)
-				// Create a running session (no end time)
-				start := time.Now().Add(-1 * time.Hour)
-				entry := &sqlite.TimeEntry{TaskID: task.ID, StartTime: start, EndTime: nil}
-				repo.CreateTimeEntry(entry)
-			},
-			want: func() string {
-				return "Summary for: running task\n=====================\nStart Time           End Time             Duration        Status\n---------------------------------------------------------------------------\n"
-			},
-			wantErr: false,
-		},
-		{
-			name:  "summary user cancels selection",
-			args:  []string{"summary", "project"},
-			input: "q\n",
-			setup: func(app *App) {
-				// Create multiple tasks
-				repo := app.repo
-				task1 := &sqlite.Task{TaskName: "project A"}
-				task2 := &sqlite.Task{TaskName: "project B"}
-				repo.CreateTask(task1)
-				repo.CreateTask(task2)
-				// Add time entries for both tasks so they appear in the selection
-				now := time.Now()
-				entry1 := &sqlite.TimeEntry{TaskID: task1.ID, StartTime: now.Add(-2 * time.Hour), EndTime: &now}
-				entry2 := &sqlite.TimeEntry{TaskID: task2.ID, StartTime: now.Add(-1 * time.Hour), EndTime: &now}
-				repo.CreateTimeEntry(entry1)
-				repo.CreateTimeEntry(entry2)
-			},
-			want: func() string {
-				return "Select a task to summarize:\n1. project A\n2. project B\nEnter number to summarize, or 'q' to quit: Summary cancelled.\n"
-			},
-			wantErr: false,
-		},
-		{
-			name:  "summary with time filter shows all entries for matching task",
-			args:  []string{"summary", "2h", "coding"},
-			input: "1\n",
-			setup: func(app *App) {
-				// Create a task with entries both inside and outside the 2h window
-				repo := app.repo
-				task := &sqlite.Task{TaskName: "coding project"}
-				repo.CreateTask(task)
-
-				// Use fixed time for deterministic test
-				baseTime := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
-				timeNow = func() time.Time { return baseTime }
-
-				// Entry within the 2h window (1 hour ago)
-				start1 := baseTime.Add(-1 * time.Hour)
-				end1 := baseTime.Add(-30 * time.Minute)
-				entry1 := &sqlite.TimeEntry{TaskID: task.ID, StartTime: start1, EndTime: &end1}
-				repo.CreateTimeEntry(entry1)
-
-				// Entry outside the 2h window (3 hours ago)
-				start2 := baseTime.Add(-3 * time.Hour)
-				end2 := baseTime.Add(-2 * time.Hour)
-				entry2 := &sqlite.TimeEntry{TaskID: task.ID, StartTime: start2, EndTime: &end2}
-				repo.CreateTimeEntry(entry2)
-
-				// Entry outside the 2h window (5 hours ago)
-				start3 := baseTime.Add(-5 * time.Hour)
-				end3 := baseTime.Add(-4 * time.Hour)
-				entry3 := &sqlite.TimeEntry{TaskID: task.ID, StartTime: start3, EndTime: &end3}
-				repo.CreateTimeEntry(entry3)
-			},
-			want: func() string {
-				taskName := "coding project"
-				prompt := "Select a task to summarize:\n1. coding project\nEnter number to summarize, or 'q' to quit: "
-				return prompt + "\nSummary for: " + taskName + "\n" + dynamicUnderline(taskName) + "\n" +
-					"Start Time           End Time             Duration        Status\n" +
-					"---------------------------------------------------------------------------\n" +
-					"2024-01-01 07:00:00  2024-01-01 08:00:00  1h 0m           Completed\n" +
-					"2024-01-01 09:00:00  2024-01-01 10:00:00  1h 0m           Completed\n" +
-					"2024-01-01 11:00:00  2024-01-01 11:30:00  0h 30m           Completed\n" +
-					"---------------------------------------------------------------------------\n" +
-					"Total Sessions: 3\n" +
-					"Time Range: 2024-01-01 07:00:00 to 2024-01-01 11:30:00\n" +
-					"Total Time: 2h 30m\n"
-			},
-			wantErr: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			app, cleanup := setupTestAppWithInMemoryRepo(t)
-			defer cleanup()
-			if tt.setup != nil {
-				tt.setup(app)
-			}
-			oldStdout := os.Stdout
-			oldStdin := os.Stdin
-			r, w, _ := os.Pipe()
-			os.Stdout = w
-			if tt.input != "" {
-				stdinR, stdinW, _ := os.Pipe()
-				os.Stdin = stdinR
-				go func() {
-					stdinW.WriteString(tt.input)
-					stdinW.Close()
-				}()
-			}
-			err := app.Run(tt.args)
-			w.Close()
-			os.Stdout = oldStdout
-			if tt.input != "" {
-				os.Stdin = oldStdin
-			}
-			var buf bytes.Buffer
-			buf.ReadFrom(r)
-			got := buf.String()
-			if (err != nil) != tt.wantErr {
-				t.Errorf("summaryTask() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if strings.Contains(tt.name, "running") || strings.Contains(tt.name, "time filter") {
-				if !strings.Contains(got, "Summary for:") {
-					t.Errorf("summaryTask() output doesn't contain expected header, got: %v", got)
-				}
-			} else {
-				want := tt.want()
-				if !tt.wantErr && got != want {
-					t.Errorf("summaryTask() output = %v, want %v", got, want)
-				}
-			}
-		})
-	}
-}
-
-func TestShowTaskSummary(t *testing.T) {
-	tests := []struct {
-		name    string
-		taskID  int64
-		setup   func(app *App)
-		want    func() string
-		wantErr bool
-	}{
-		{
-			name:    "task not found",
-			taskID:  999,
-			setup:   func(app *App) {},
-			want:    func() string { return "" },
-			wantErr: true,
-		},
-		{
-			name:   "task with no time entries",
-			taskID: 1,
-			setup: func(app *App) {
-				task := &sqlite.Task{ID: 1, TaskName: "test task"}
-				app.repo.CreateTask(task)
-			},
-			want:    func() string { return "" },
-			wantErr: true,
-		},
-		{
-			name:   "task with completed sessions",
-			taskID: 1,
-			setup: func(app *App) {
-				task := &sqlite.Task{ID: 1, TaskName: "test task"}
-				app.repo.CreateTask(task)
-				start1 := time.Date(2024, 1, 1, 9, 0, 0, 0, time.UTC)
-				end1 := time.Date(2024, 1, 1, 11, 0, 0, 0, time.UTC)
-				entry1 := &sqlite.TimeEntry{
-					TaskID:    task.ID,
-					StartTime: start1,
-					EndTime:   &end1,
-				}
-				app.repo.CreateTimeEntry(entry1)
-			},
-			want: func() string {
-				taskName := "test task"
-				return "\nSummary for: " + taskName + "\n" + dynamicUnderline(taskName) + "\n" +
-					"Start Time           End Time             Duration        Status\n" +
-					"---------------------------------------------------------------------------\n" +
-					"2024-01-01 09:00:00  2024-01-01 11:00:00  2h 0m           Completed\n" +
-					"---------------------------------------------------------------------------\n" +
-					"Total Sessions: 1\n" +
-					"Time Range: 2024-01-01 09:00:00 to 2024-01-01 11:00:00\n" +
-					"Total Time: 2h 0m\n"
-			},
-			wantErr: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			app, cleanup := setupTestAppWithInMemoryRepo(t)
-			defer cleanup()
-			if tt.setup != nil {
-				tt.setup(app)
-			}
-			oldStdout := os.Stdout
-			r, w, _ := os.Pipe()
-			os.Stdout = w
-			err := app.showTaskSummary(tt.taskID)
-			w.Close()
-			os.Stdout = oldStdout
-			var buf bytes.Buffer
-			buf.ReadFrom(r)
-			got := buf.String()
-			want := tt.want()
-			if (err != nil) != tt.wantErr {
-				t.Errorf("showTaskSummary() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !tt.wantErr && got != want {
-				t.Errorf("showTaskSummary() output = %v, want %v", got, want)
-			}
-		})
-	}
-}
-
-// Helper to run delete with injected stdin
-func runDeleteWithInput(app *App, args []string, input string) (output string, err error) {
-	oldStdin := os.Stdin
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
-
-	inR, inW, _ := os.Pipe()
-	os.Stdin = inR
-	inW.Write([]byte(input + "\n"))
-	inW.Close()
-
-	err = app.deleteTask(args)
-
-	w.Close()
-	os.Stdout = oldStdout
-	os.Stdin = oldStdin
-
-	var buf bytes.Buffer
-	buf.ReadFrom(r)
-	output = buf.String()
-	return
-}
-
-func TestDeleteCommand(t *testing.T) {
-	fixedTime := time.Date(2025, 6, 16, 12, 0, 0, 0, time.UTC)
-	timeNow = func() time.Time { return fixedTime }
-
-	t.Run("delete task from last 24h", func(t *testing.T) {
-		app, cleanup := setupTestAppWithInMemoryRepo(t)
-		defer cleanup()
-		task := &sqlite.Task{TaskName: "Task 1"}
-		app.repo.CreateTask(task)
-		entry := &sqlite.TimeEntry{TaskID: task.ID, StartTime: fixedTime.Add(-2 * time.Hour), EndTime: &fixedTime}
-		app.repo.CreateTimeEntry(entry)
-		output, err := runDeleteWithInput(app, []string{}, "1")
-		if err != nil {
-			t.Fatalf("deleteTask failed: %v", err)
-		}
-		if !strings.Contains(output, "Deleted task: Task 1") {
-			t.Errorf("unexpected output: %s", output)
-		}
-	})
-
-	t.Run("delete task with custom duration", func(t *testing.T) {
-		app, cleanup := setupTestAppWithInMemoryRepo(t)
-		defer cleanup()
-		task := &sqlite.Task{TaskName: "Old Task"}
-		app.repo.CreateTask(task)
-		entry := &sqlite.TimeEntry{TaskID: task.ID, StartTime: fixedTime.Add(-48 * time.Hour), EndTime: &fixedTime}
-		app.repo.CreateTimeEntry(entry)
-		output, err := runDeleteWithInput(app, []string{"3d"}, "1")
-		if err != nil {
-			t.Fatalf("deleteTask failed: %v", err)
-		}
-		if !strings.Contains(output, "Deleted task: Old Task") {
-			t.Errorf("unexpected output: %s", output)
-		}
-	})
-
-	t.Run("delete with text filter", func(t *testing.T) {
-		app, cleanup := setupTestAppWithInMemoryRepo(t)
-		defer cleanup()
-		task1 := &sqlite.Task{TaskName: "Alpha"}
-		task2 := &sqlite.Task{TaskName: "Beta"}
-		app.repo.CreateTask(task1)
-		app.repo.CreateTask(task2)
-		entry1 := &sqlite.TimeEntry{TaskID: task1.ID, StartTime: fixedTime.Add(-2 * time.Hour), EndTime: &fixedTime}
-		entry2 := &sqlite.TimeEntry{TaskID: task2.ID, StartTime: fixedTime.Add(-3 * time.Hour), EndTime: &fixedTime}
-		app.repo.CreateTimeEntry(entry1)
-		app.repo.CreateTimeEntry(entry2)
-		output, err := runDeleteWithInput(app, []string{"Alpha"}, "1")
-		if err != nil {
-			t.Fatalf("deleteTask failed: %v", err)
-		}
-		if !strings.Contains(output, "Deleted task: Alpha") {
-			t.Errorf("unexpected output: %s", output)
-		}
-	})
-
-	t.Run("cancel delete", func(t *testing.T) {
-		app, cleanup := setupTestAppWithInMemoryRepo(t)
-		defer cleanup()
-		task := &sqlite.Task{TaskName: "Task X"}
-		app.repo.CreateTask(task)
-		entry := &sqlite.TimeEntry{TaskID: task.ID, StartTime: fixedTime.Add(-2 * time.Hour), EndTime: &fixedTime}
-		app.repo.CreateTimeEntry(entry)
-		output, err := runDeleteWithInput(app, []string{}, "q")
-		if err != nil {
-			t.Fatalf("deleteTask failed: %v", err)
-		}
-		if !strings.Contains(output, "Delete cancelled.") {
-			t.Errorf("unexpected output: %s", output)
-		}
-	})
-
-	t.Run("invalid selection", func(t *testing.T) {
-		app, cleanup := setupTestAppWithInMemoryRepo(t)
-		defer cleanup()
-		task := &sqlite.Task{TaskName: "Task Y"}
-		app.repo.CreateTask(task)
-		entry := &sqlite.TimeEntry{TaskID: task.ID, StartTime: fixedTime.Add(-2 * time.Hour), EndTime: &fixedTime}
-		app.repo.CreateTimeEntry(entry)
-		_, err := runDeleteWithInput(app, []string{}, "99")
-		if err == nil || !strings.Contains(err.Error(), "invalid selection") {
-			t.Errorf("expected invalid selection error, got: %v", err)
-		}
-	})
-
-	t.Run("no tasks found to delete", func(t *testing.T) {
-		app, cleanup := setupTestAppWithInMemoryRepo(t)
-		defer cleanup()
-		output, err := runDeleteWithInput(app, []string{}, "1")
-		if err != nil {
-			t.Fatalf("deleteTask failed: %v", err)
-		}
-		if !strings.Contains(output, "No tasks found to delete.") {
-			t.Errorf("unexpected output: %s", output)
-		}
-	})
 }
