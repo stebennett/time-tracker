@@ -278,7 +278,7 @@ func createMigrationsTable(db *sql.DB) error {
 	}
 
 	// Add dirty column to existing migrations table if it doesn't exist
-	_, err = db.Exec("ALTER TABLE migrations ADD COLUMN dirty BOOLEAN DEFAULT FALSE")
+	_, _ = db.Exec("ALTER TABLE migrations ADD COLUMN dirty BOOLEAN DEFAULT FALSE")
 	// Ignore error if column already exists
 	return nil
 }
