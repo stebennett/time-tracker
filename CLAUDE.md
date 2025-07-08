@@ -108,7 +108,10 @@ The application uses SQLite with configurable location:
 - Implement interfaces where appropriate
 - Use dependency injection for better testability
 - Document all exported functions and types
-- Write unit tests for all business logic using table-driven tests
+- **REQUIRED**: Write unit tests for all business logic using table-driven tests
+- **REQUIRED**: All new code must include comprehensive unit tests before integration
+- **REQUIRED**: Tests must cover both success and error scenarios
+- **REQUIRED**: Run `go test ./...` to ensure all tests pass before committing changes
 - Use prepared statements for database queries
 - Never commit secrets or credentials
 - Use environment variables for configuration
