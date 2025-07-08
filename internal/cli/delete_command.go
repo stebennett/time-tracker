@@ -108,13 +108,13 @@ func (c *DeleteCommand) deleteTask(args []string) error {
 	selectedTaskID := taskIDs[idx-1]
 	task, _ := c.api.GetTask(selectedTaskID)
 
-	// Delete all time entries for the task
-	entryOpts := domain.SearchOptions{}
-	allEntries, err := c.api.SearchTimeEntries(entryOpts)
+	// Delete all time entries for the selected task only
+	entryOpts := domain.SearchOptions{TaskID: &selectedTaskID}
+	taskEntries, err := c.api.SearchTimeEntries(entryOpts)
 	if err != nil {
 		return fmt.Errorf("failed to get time entries for task: %w", err)
 	}
-	for _, entry := range allEntries {
+	for _, entry := range taskEntries {
 		err := c.api.DeleteTimeEntry(entry.ID)
 		if err != nil {
 			return fmt.Errorf("failed to delete time entry %d: %w", entry.ID, err)

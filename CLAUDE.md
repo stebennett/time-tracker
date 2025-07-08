@@ -50,6 +50,23 @@ export TT_DB=/tmp/tt_test.db
 unset TT_DB
 ```
 
+### End-to-End Testing
+**REQUIRED**: Run the comprehensive end-to-end test script at the end of every development session:
+
+```bash
+./scripts/e2e-test.sh
+```
+
+This script tests all major functionality including:
+- Task creation and management
+- Time tracking and filtering
+- Data export and integrity
+- Resume and summary functionality
+- Delete functionality (including bug regression testing)
+- Edge cases and performance
+
+The script uses a separate test database and provides detailed success/failure reporting.
+
 ### Database Configuration
 - Production: `~/.tt/tt.db` (Linux/macOS) or `%USERPROFILE%\.tt\tt.db` (Windows)
 - Test: Use `TT_DB` environment variable to specify alternative location
