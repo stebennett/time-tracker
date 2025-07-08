@@ -29,6 +29,32 @@ go test ./internal/cli
 go mod tidy
 ```
 
+### Testing with Separate Database
+**IMPORTANT**: When manually testing the CLI during development, always use a separate test database to avoid interfering with production data:
+
+```bash
+# Build test binary
+go build -o tt-test cmd/tt/main.go
+
+# Run commands with test database
+TT_DB=/tmp/tt_test.db ./tt-test start "Test task"
+TT_DB=/tmp/tt_test.db ./tt-test current
+TT_DB=/tmp/tt_test.db ./tt-test list
+TT_DB=/tmp/tt_test.db ./tt-test stop
+
+# Or export the environment variable for multiple commands
+export TT_DB=/tmp/tt_test.db
+./tt-test start "Test task"
+./tt-test current
+./tt-test stop
+unset TT_DB
+```
+
+### Database Configuration
+- Production: `~/.tt/tt.db` (Linux/macOS) or `%USERPROFILE%\.tt\tt.db` (Windows)
+- Test: Use `TT_DB` environment variable to specify alternative location
+- Unit tests: Use in-memory mock implementations
+
 ### Testing
 The project uses Go's built-in testing framework with `github.com/stretchr/testify` for assertions. All tests follow the `*_test.go` naming convention.
 

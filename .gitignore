@@ -36,6 +36,8 @@ Thumbs.db
 # Build output
 bin/
 dist/
+tt
+tt.exe
 
 # Environment files
 .env

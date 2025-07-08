@@ -7,7 +7,6 @@ import (
 	"time-tracker/internal/api"
 	"time-tracker/internal/cli"
 	"time-tracker/internal/config"
-	"time-tracker/internal/repository/sqlite"
 )
 
 func main() {
@@ -33,26 +32,4 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
-}
-
-// createRepository creates and returns a repository instance
-// This function can be easily modified for different environments (dev, test, prod)
-func createRepository() (sqlite.Repository, error) {
-	// For now, we'll use the default SQLite repository
-	// In the future, this could be extended to support different repository types
-	// or different configurations based on environment variables
-
-	// Get database path
-	dbPath, err := cli.GetDatabasePath()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get database path: %w", err)
-	}
-
-	// Initialize SQLite repository
-	repo, err := sqlite.New(dbPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize database: %w", err)
-	}
-
-	return repo, nil
 }
