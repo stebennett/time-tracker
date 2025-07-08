@@ -3,7 +3,7 @@ package cli
 import (
 	"fmt"
 	"time-tracker/internal/api"
-	"time-tracker/internal/repository/sqlite"
+	"time-tracker/internal/domain"
 )
 
 // CurrentCommand handles the current command
@@ -24,7 +24,7 @@ func (c *CurrentCommand) Execute(args []string) error {
 // showCurrentTask displays the currently running task
 func (c *CurrentCommand) showCurrentTask() error {
 	// Search for tasks with no end time
-	opts := sqlite.SearchOptions{}
+	opts := domain.SearchOptions{}
 	entries, err := c.api.SearchTimeEntries(opts)
 	if err != nil {
 		return fmt.Errorf("failed to search for running tasks: %w", err)

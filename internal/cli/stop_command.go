@@ -3,7 +3,7 @@ package cli
 import (
 	"fmt"
 	"time-tracker/internal/api"
-	"time-tracker/internal/repository/sqlite"
+	"time-tracker/internal/domain"
 )
 
 // StopCommand handles the stop command
@@ -27,7 +27,7 @@ func (c *StopCommand) Execute(args []string) error {
 // stopRunningTasks marks all running tasks as complete
 func (c *StopCommand) stopRunningTasks() error {
 	// Search for tasks with no end time
-	opts := sqlite.SearchOptions{}
+	opts := domain.SearchOptions{}
 	entries, err := c.api.SearchTimeEntries(opts)
 	if err != nil {
 		return fmt.Errorf("failed to search for running tasks: %w", err)

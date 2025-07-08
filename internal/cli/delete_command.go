@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"time-tracker/internal/api"
-	"time-tracker/internal/repository/sqlite"
+	"time-tracker/internal/domain"
 )
 
 // DeleteCommand handles the delete command
@@ -50,7 +50,7 @@ func (c *DeleteCommand) deleteTask(args []string) error {
 	}
 
 	// Build search options like listTasks
-	opts := sqlite.SearchOptions{StartTime: &startTime, EndTime: &now}
+	opts := domain.SearchOptions{StartTime: &startTime, EndTime: &now}
 	if filterText != "" {
 		opts.TaskName = &filterText
 	}
@@ -65,7 +65,7 @@ func (c *DeleteCommand) deleteTask(args []string) error {
 	}
 
 	// Group by task, get the last entry for each task
-	taskMap := make(map[int64]*sqlite.TimeEntry)
+	taskMap := make(map[int64]*domain.TimeEntry)
 	for _, entry := range entries {
 		if existing, ok := taskMap[entry.TaskID]; !ok || entry.StartTime.After(existing.StartTime) {
 			taskMap[entry.TaskID] = entry
@@ -109,7 +109,7 @@ func (c *DeleteCommand) deleteTask(args []string) error {
 	task, _ := c.api.GetTask(selectedTaskID)
 
 	// Delete all time entries for the task
-	entryOpts := sqlite.SearchOptions{TaskID: &selectedTaskID}
+	entryOpts := domain.SearchOptions{}
 	allEntries, err := c.api.SearchTimeEntries(entryOpts)
 	if err != nil {
 		return fmt.Errorf("failed to get time entries for task: %w", err)

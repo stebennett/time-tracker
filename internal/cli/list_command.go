@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 	"time-tracker/internal/api"
-	"time-tracker/internal/repository/sqlite"
+	"time-tracker/internal/domain"
 )
 
 // ListCommand handles the list command
@@ -26,7 +26,7 @@ func (c *ListCommand) Execute(args []string) error {
 
 // listTasks handles the list command with various options
 func (c *ListCommand) listTasks(args []string) error {
-	opts := sqlite.SearchOptions{}
+	opts := domain.SearchOptions{}
 
 	// If no arguments, list all tasks
 	if len(args) == 0 {
@@ -68,7 +68,7 @@ func (c *ListCommand) listTasks(args []string) error {
 // printEntries prints one line per task in the format:
 // startTime - endTime (duration): taskName
 // Where startTime and endTime are from the last time entry for the task, and endTime is 'running' if the entry is running.
-func (c *ListCommand) printEntries(entries []*sqlite.TimeEntry) error {
+func (c *ListCommand) printEntries(entries []*domain.TimeEntry) error {
 	if len(entries) == 0 {
 		fmt.Println("No tasks found")
 		return nil

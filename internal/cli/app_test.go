@@ -10,28 +10,28 @@ import (
 	"testing"
 	"time"
 
-	"time-tracker/internal/repository/sqlite"
+	"time-tracker/internal/domain"
 )
 
 // mockAPI implements the api.API interface for testing
 type mockAPI struct {
-	tasks       map[int64]*sqlite.Task
-	timeEntries map[int64]*sqlite.TimeEntry
+	tasks       map[int64]*domain.Task
+	timeEntries map[int64]*domain.TimeEntry
 	nextTaskID  int64
 	nextEntryID int64
 }
 
 func newMockAPI() *mockAPI {
 	return &mockAPI{
-		tasks:       make(map[int64]*sqlite.Task),
-		timeEntries: make(map[int64]*sqlite.TimeEntry),
+		tasks:       make(map[int64]*domain.Task),
+		timeEntries: make(map[int64]*domain.TimeEntry),
 		nextTaskID:  1,
 		nextEntryID: 1,
 	}
 }
 
-func (m *mockAPI) CreateTask(name string) (*sqlite.Task, error) {
-	task := &sqlite.Task{
+func (m *mockAPI) CreateTask(name string) (*domain.Task, error) {
+	task := &domain.Task{
 		ID:       m.nextTaskID,
 		TaskName: name,
 	}
@@ -40,7 +40,7 @@ func (m *mockAPI) CreateTask(name string) (*sqlite.Task, error) {
 	return task, nil
 }
 
-func (m *mockAPI) GetTask(id int64) (*sqlite.Task, error) {
+func (m *mockAPI) GetTask(id int64) (*domain.Task, error) {
 	task, exists := m.tasks[id]
 	if !exists {
 		return nil, fmt.Errorf("task not found: %d", id)
@@ -48,8 +48,8 @@ func (m *mockAPI) GetTask(id int64) (*sqlite.Task, error) {
 	return task, nil
 }
 
-func (m *mockAPI) ListTasks() ([]*sqlite.Task, error) {
-	tasks := make([]*sqlite.Task, 0, len(m.tasks))
+func (m *mockAPI) ListTasks() ([]*domain.Task, error) {
+	tasks := make([]*domain.Task, 0, len(m.tasks))
 	for _, task := range m.tasks {
 		tasks = append(tasks, task)
 	}
@@ -77,8 +77,8 @@ func (m *mockAPI) DeleteTask(id int64) error {
 	return nil
 }
 
-func (m *mockAPI) CreateTimeEntry(taskID int64, startTime time.Time, endTime *time.Time) (*sqlite.TimeEntry, error) {
-	entry := &sqlite.TimeEntry{
+func (m *mockAPI) CreateTimeEntry(taskID int64, startTime time.Time, endTime *time.Time) (*domain.TimeEntry, error) {
+	entry := &domain.TimeEntry{
 		ID:        m.nextEntryID,
 		TaskID:    taskID,
 		StartTime: startTime,
@@ -89,7 +89,7 @@ func (m *mockAPI) CreateTimeEntry(taskID int64, startTime time.Time, endTime *ti
 	return entry, nil
 }
 
-func (m *mockAPI) GetTimeEntry(id int64) (*sqlite.TimeEntry, error) {
+func (m *mockAPI) GetTimeEntry(id int64) (*domain.TimeEntry, error) {
 	entry, exists := m.timeEntries[id]
 	if !exists {
 		return nil, fmt.Errorf("time entry not found: %d", id)
@@ -97,16 +97,16 @@ func (m *mockAPI) GetTimeEntry(id int64) (*sqlite.TimeEntry, error) {
 	return entry, nil
 }
 
-func (m *mockAPI) ListTimeEntries() ([]*sqlite.TimeEntry, error) {
-	entries := make([]*sqlite.TimeEntry, 0, len(m.timeEntries))
+func (m *mockAPI) ListTimeEntries() ([]*domain.TimeEntry, error) {
+	entries := make([]*domain.TimeEntry, 0, len(m.timeEntries))
 	for _, entry := range m.timeEntries {
 		entries = append(entries, entry)
 	}
 	return entries, nil
 }
 
-func (m *mockAPI) SearchTimeEntries(opts sqlite.SearchOptions) ([]*sqlite.TimeEntry, error) {
-	var entries []*sqlite.TimeEntry
+func (m *mockAPI) SearchTimeEntries(opts domain.SearchOptions) ([]*domain.TimeEntry, error) {
+	var entries []*domain.TimeEntry
 
 	for _, entry := range m.timeEntries {
 		// Filter by time range
@@ -162,7 +162,7 @@ func (m *mockAPI) DeleteTimeEntry(id int64) error {
 	return nil
 }
 
-func (m *mockAPI) StartTask(taskID int64) (*sqlite.TimeEntry, error) {
+func (m *mockAPI) StartTask(taskID int64) (*domain.TimeEntry, error) {
 	// Stop any running tasks
 	now := time.Now()
 	for _, entry := range m.timeEntries {
@@ -188,7 +188,7 @@ func (m *mockAPI) StopTask(entryID int64) error {
 	return nil
 }
 
-func (m *mockAPI) ResumeTask(taskID int64) (*sqlite.TimeEntry, error) {
+func (m *mockAPI) ResumeTask(taskID int64) (*domain.TimeEntry, error) {
 	// Stop any running tasks
 	now := time.Now()
 	for _, entry := range m.timeEntries {
@@ -201,7 +201,7 @@ func (m *mockAPI) ResumeTask(taskID int64) (*sqlite.TimeEntry, error) {
 	return m.CreateTimeEntry(taskID, time.Now(), nil)
 }
 
-func (m *mockAPI) GetCurrentlyRunningTask() (*sqlite.TimeEntry, error) {
+func (m *mockAPI) GetCurrentlyRunningTask() (*domain.TimeEntry, error) {
 	for _, entry := range m.timeEntries {
 		if entry.EndTime == nil {
 			return entry, nil
@@ -210,7 +210,7 @@ func (m *mockAPI) GetCurrentlyRunningTask() (*sqlite.TimeEntry, error) {
 	return nil, fmt.Errorf("no running task")
 }
 
-func (m *mockAPI) ListTodayTasks() ([]*sqlite.Task, error) {
+func (m *mockAPI) ListTodayTasks() ([]*domain.Task, error) {
 	// For simplicity, return all tasks
 	return m.ListTasks()
 }
@@ -719,7 +719,7 @@ func TestSearchByPartialTaskName(t *testing.T) {
 
 	// Search for "Alpha"
 	alpha := "Alpha"
-	opts := sqlite.SearchOptions{TaskName: &alpha}
+	opts := domain.SearchOptions{TaskName: &alpha}
 	results, err := app.api.SearchTimeEntries(opts)
 	if err != nil {
 		t.Fatalf("Failed to search time entries: %v", err)
@@ -730,7 +730,7 @@ func TestSearchByPartialTaskName(t *testing.T) {
 
 	// Search for "Project"
 	project := "Project"
-	opts = sqlite.SearchOptions{TaskName: &project}
+	opts = domain.SearchOptions{TaskName: &project}
 	results, err = app.api.SearchTimeEntries(opts)
 	if err != nil {
 		t.Fatalf("Failed to search time entries: %v", err)

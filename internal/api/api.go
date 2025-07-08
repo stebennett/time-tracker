@@ -3,68 +3,88 @@ package api
 import (
 	"errors"
 	"time"
+	"time-tracker/internal/domain"
 	"time-tracker/internal/repository/sqlite"
 )
 
 // API defines the interface for all task and time entry operations.
 type API interface {
 	// Task operations
-	CreateTask(name string) (*sqlite.Task, error)
-	GetTask(id int64) (*sqlite.Task, error)
-	ListTasks() ([]*sqlite.Task, error)
+	CreateTask(name string) (*domain.Task, error)
+	GetTask(id int64) (*domain.Task, error)
+	ListTasks() ([]*domain.Task, error)
 	UpdateTask(id int64, name string) error
 	DeleteTask(id int64) error
 
 	// Time entry operations
-	CreateTimeEntry(taskID int64, startTime time.Time, endTime *time.Time) (*sqlite.TimeEntry, error)
-	GetTimeEntry(id int64) (*sqlite.TimeEntry, error)
-	ListTimeEntries() ([]*sqlite.TimeEntry, error)
-	SearchTimeEntries(opts sqlite.SearchOptions) ([]*sqlite.TimeEntry, error)
+	CreateTimeEntry(taskID int64, startTime time.Time, endTime *time.Time) (*domain.TimeEntry, error)
+	GetTimeEntry(id int64) (*domain.TimeEntry, error)
+	ListTimeEntries() ([]*domain.TimeEntry, error)
+	SearchTimeEntries(opts domain.SearchOptions) ([]*domain.TimeEntry, error)
 	UpdateTimeEntry(id int64, startTime time.Time, endTime *time.Time, taskID int64) error
 	DeleteTimeEntry(id int64) error
 
 	// Business logic implementations
-	StartTask(taskID int64) (*sqlite.TimeEntry, error)
+	StartTask(taskID int64) (*domain.TimeEntry, error)
 	StopTask(entryID int64) error
-	ResumeTask(taskID int64) (*sqlite.TimeEntry, error)
-	GetCurrentlyRunningTask() (*sqlite.TimeEntry, error)
-	ListTodayTasks() ([]*sqlite.Task, error)
+	ResumeTask(taskID int64) (*domain.TimeEntry, error)
+	GetCurrentlyRunningTask() (*domain.TimeEntry, error)
+	ListTodayTasks() ([]*domain.Task, error)
 }
 
 type apiImpl struct {
-	repo sqlite.Repository
+	repo   sqlite.Repository
+	mapper *domain.Mapper
 }
 
 // New creates a new API instance.
 func New(repo sqlite.Repository) API {
-	return &apiImpl{repo: repo}
+	return &apiImpl{
+		repo:   repo,
+		mapper: domain.NewMapper(),
+	}
 }
 
 // Task CRUD implementations
-func (a *apiImpl) CreateTask(name string) (*sqlite.Task, error) {
-	task := &sqlite.Task{TaskName: name}
-	err := a.repo.CreateTask(task)
+func (a *apiImpl) CreateTask(name string) (*domain.Task, error) {
+	dbTask := &sqlite.Task{TaskName: name}
+	err := a.repo.CreateTask(dbTask)
 	if err != nil {
 		return nil, err
 	}
-	return task, nil
+	domainTask := a.mapper.Task.FromDatabase(*dbTask)
+	return &domainTask, nil
 }
 
-func (a *apiImpl) GetTask(id int64) (*sqlite.Task, error) {
-	return a.repo.GetTask(id)
+func (a *apiImpl) GetTask(id int64) (*domain.Task, error) {
+	dbTask, err := a.repo.GetTask(id)
+	if err != nil {
+		return nil, err
+	}
+	domainTask := a.mapper.Task.FromDatabase(*dbTask)
+	return &domainTask, nil
 }
 
-func (a *apiImpl) ListTasks() ([]*sqlite.Task, error) {
-	return a.repo.ListTasks()
+func (a *apiImpl) ListTasks() ([]*domain.Task, error) {
+	dbTasks, err := a.repo.ListTasks()
+	if err != nil {
+		return nil, err
+	}
+	domainTasks := make([]*domain.Task, len(dbTasks))
+	for i, dbTask := range dbTasks {
+		domainTask := a.mapper.Task.FromDatabase(*dbTask)
+		domainTasks[i] = &domainTask
+	}
+	return domainTasks, nil
 }
 
 func (a *apiImpl) UpdateTask(id int64, name string) error {
-	task, err := a.repo.GetTask(id)
+	dbTask, err := a.repo.GetTask(id)
 	if err != nil {
 		return err
 	}
-	task.TaskName = name
-	return a.repo.UpdateTask(task)
+	dbTask.TaskName = name
+	return a.repo.UpdateTask(dbTask)
 }
 
 func (a *apiImpl) DeleteTask(id int64) error {
@@ -72,36 +92,61 @@ func (a *apiImpl) DeleteTask(id int64) error {
 }
 
 // TimeEntry CRUD implementations
-func (a *apiImpl) CreateTimeEntry(taskID int64, startTime time.Time, endTime *time.Time) (*sqlite.TimeEntry, error) {
-	entry := &sqlite.TimeEntry{TaskID: taskID, StartTime: startTime, EndTime: endTime}
-	err := a.repo.CreateTimeEntry(entry)
+func (a *apiImpl) CreateTimeEntry(taskID int64, startTime time.Time, endTime *time.Time) (*domain.TimeEntry, error) {
+	dbEntry := &sqlite.TimeEntry{TaskID: taskID, StartTime: startTime, EndTime: endTime}
+	err := a.repo.CreateTimeEntry(dbEntry)
 	if err != nil {
 		return nil, err
 	}
-	return entry, nil
+	domainEntry := a.mapper.TimeEntry.FromDatabase(*dbEntry)
+	return &domainEntry, nil
 }
 
-func (a *apiImpl) GetTimeEntry(id int64) (*sqlite.TimeEntry, error) {
-	return a.repo.GetTimeEntry(id)
+func (a *apiImpl) GetTimeEntry(id int64) (*domain.TimeEntry, error) {
+	dbEntry, err := a.repo.GetTimeEntry(id)
+	if err != nil {
+		return nil, err
+	}
+	domainEntry := a.mapper.TimeEntry.FromDatabase(*dbEntry)
+	return &domainEntry, nil
 }
 
-func (a *apiImpl) ListTimeEntries() ([]*sqlite.TimeEntry, error) {
-	return a.repo.ListTimeEntries()
+func (a *apiImpl) ListTimeEntries() ([]*domain.TimeEntry, error) {
+	dbEntries, err := a.repo.ListTimeEntries()
+	if err != nil {
+		return nil, err
+	}
+	domainEntries := make([]*domain.TimeEntry, len(dbEntries))
+	for i, dbEntry := range dbEntries {
+		domainEntry := a.mapper.TimeEntry.FromDatabase(*dbEntry)
+		domainEntries[i] = &domainEntry
+	}
+	return domainEntries, nil
 }
 
-func (a *apiImpl) SearchTimeEntries(opts sqlite.SearchOptions) ([]*sqlite.TimeEntry, error) {
-	return a.repo.SearchTimeEntries(opts)
+func (a *apiImpl) SearchTimeEntries(opts domain.SearchOptions) ([]*domain.TimeEntry, error) {
+	dbOpts := a.mapper.SearchOptions.ToDatabase(opts)
+	dbEntries, err := a.repo.SearchTimeEntries(dbOpts)
+	if err != nil {
+		return nil, err
+	}
+	domainEntries := make([]*domain.TimeEntry, len(dbEntries))
+	for i, dbEntry := range dbEntries {
+		domainEntry := a.mapper.TimeEntry.FromDatabase(*dbEntry)
+		domainEntries[i] = &domainEntry
+	}
+	return domainEntries, nil
 }
 
 func (a *apiImpl) UpdateTimeEntry(id int64, startTime time.Time, endTime *time.Time, taskID int64) error {
-	entry, err := a.repo.GetTimeEntry(id)
+	dbEntry, err := a.repo.GetTimeEntry(id)
 	if err != nil {
 		return err
 	}
-	entry.StartTime = startTime
-	entry.EndTime = endTime
-	entry.TaskID = taskID
-	return a.repo.UpdateTimeEntry(entry)
+	dbEntry.StartTime = startTime
+	dbEntry.EndTime = endTime
+	dbEntry.TaskID = taskID
+	return a.repo.UpdateTimeEntry(dbEntry)
 }
 
 func (a *apiImpl) DeleteTimeEntry(id int64) error {
@@ -111,7 +156,7 @@ func (a *apiImpl) DeleteTimeEntry(id int64) error {
 // Business logic implementations
 
 // StartTask stops any running tasks and starts a new one for the given taskID.
-func (a *apiImpl) StartTask(taskID int64) (*sqlite.TimeEntry, error) {
+func (a *apiImpl) StartTask(taskID int64) (*domain.TimeEntry, error) {
 	// Stop all running tasks
 	running, _ := a.GetCurrentlyRunningTask()
 	if running != nil {
@@ -120,33 +165,34 @@ func (a *apiImpl) StartTask(taskID int64) (*sqlite.TimeEntry, error) {
 			return nil, err
 		}
 	}
-	entry := &sqlite.TimeEntry{
+	dbEntry := &sqlite.TimeEntry{
 		TaskID:    taskID,
 		StartTime: time.Now(),
 	}
-	err := a.repo.CreateTimeEntry(entry)
+	err := a.repo.CreateTimeEntry(dbEntry)
 	if err != nil {
 		return nil, err
 	}
-	return entry, nil
+	domainEntry := a.mapper.TimeEntry.FromDatabase(*dbEntry)
+	return &domainEntry, nil
 }
 
 // StopTask sets the EndTime for the given entryID to now.
 func (a *apiImpl) StopTask(entryID int64) error {
-	entry, err := a.repo.GetTimeEntry(entryID)
+	dbEntry, err := a.repo.GetTimeEntry(entryID)
 	if err != nil {
 		return err
 	}
-	if entry.EndTime != nil {
+	if dbEntry.EndTime != nil {
 		return errors.New("task already stopped")
 	}
 	now := time.Now()
-	entry.EndTime = &now
-	return a.repo.UpdateTimeEntry(entry)
+	dbEntry.EndTime = &now
+	return a.repo.UpdateTimeEntry(dbEntry)
 }
 
 // ResumeTask stops any running tasks and starts a new entry for the given taskID.
-func (a *apiImpl) ResumeTask(taskID int64) (*sqlite.TimeEntry, error) {
+func (a *apiImpl) ResumeTask(taskID int64) (*domain.TimeEntry, error) {
 	running, _ := a.GetCurrentlyRunningTask()
 	if running != nil {
 		err := a.StopTask(running.ID)
@@ -154,51 +200,54 @@ func (a *apiImpl) ResumeTask(taskID int64) (*sqlite.TimeEntry, error) {
 			return nil, err
 		}
 	}
-	entry := &sqlite.TimeEntry{
+	dbEntry := &sqlite.TimeEntry{
 		TaskID:    taskID,
 		StartTime: time.Now(),
 	}
-	err := a.repo.CreateTimeEntry(entry)
+	err := a.repo.CreateTimeEntry(dbEntry)
 	if err != nil {
 		return nil, err
 	}
-	return entry, nil
+	domainEntry := a.mapper.TimeEntry.FromDatabase(*dbEntry)
+	return &domainEntry, nil
 }
 
 // GetCurrentlyRunningTask returns the currently running time entry, or error if none.
-func (a *apiImpl) GetCurrentlyRunningTask() (*sqlite.TimeEntry, error) {
-	entries, err := a.repo.SearchTimeEntries(sqlite.SearchOptions{})
+func (a *apiImpl) GetCurrentlyRunningTask() (*domain.TimeEntry, error) {
+	dbEntries, err := a.repo.SearchTimeEntries(sqlite.SearchOptions{})
 	if err != nil {
 		return nil, err
 	}
-	for _, entry := range entries {
-		if entry.EndTime == nil {
-			return entry, nil
+	for _, dbEntry := range dbEntries {
+		if dbEntry.EndTime == nil {
+			domainEntry := a.mapper.TimeEntry.FromDatabase(*dbEntry)
+			return &domainEntry, nil
 		}
 	}
 	return nil, errors.New("no running task")
 }
 
 // ListTodayTasks returns all tasks with time entries for today.
-func (a *apiImpl) ListTodayTasks() ([]*sqlite.Task, error) {
+func (a *apiImpl) ListTodayTasks() ([]*domain.Task, error) {
 	now := time.Now()
 	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	endOfDay := startOfDay.Add(24 * time.Hour)
-	entries, err := a.repo.SearchTimeEntries(sqlite.SearchOptions{
+	dbEntries, err := a.repo.SearchTimeEntries(sqlite.SearchOptions{
 		StartTime: &startOfDay,
 		EndTime:   &endOfDay,
 	})
 	if err != nil {
 		return nil, err
 	}
-	taskMap := make(map[int64]*sqlite.Task)
-	for _, entry := range entries {
-		task, err := a.repo.GetTask(entry.TaskID)
+	taskMap := make(map[int64]*domain.Task)
+	for _, dbEntry := range dbEntries {
+		dbTask, err := a.repo.GetTask(dbEntry.TaskID)
 		if err == nil {
-			taskMap[task.ID] = task
+			domainTask := a.mapper.Task.FromDatabase(*dbTask)
+			taskMap[domainTask.ID] = &domainTask
 		}
 	}
-	tasks := make([]*sqlite.Task, 0, len(taskMap))
+	tasks := make([]*domain.Task, 0, len(taskMap))
 	for _, t := range taskMap {
 		tasks = append(tasks, t)
 	}

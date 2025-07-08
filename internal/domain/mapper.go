@@ -92,16 +92,46 @@ func (m *TimeEntryMapper) FromDatabaseSlice(dbEntries []sqlite.TimeEntry) []Time
 	return domainEntries
 }
 
+// SearchOptionsMapper handles conversion between domain and database SearchOptions.
+type SearchOptionsMapper struct{}
+
+// NewSearchOptionsMapper creates a new SearchOptionsMapper instance.
+func NewSearchOptionsMapper() *SearchOptionsMapper {
+	return &SearchOptionsMapper{}
+}
+
+// ToDatabase converts domain SearchOptions to database SearchOptions.
+func (m *SearchOptionsMapper) ToDatabase(domainOpts SearchOptions) sqlite.SearchOptions {
+	return sqlite.SearchOptions{
+		StartTime: domainOpts.StartTime,
+		EndTime:   domainOpts.EndTime,
+		TaskID:    domainOpts.TaskID,
+		TaskName:  domainOpts.TaskName,
+	}
+}
+
+// FromDatabase converts database SearchOptions to domain SearchOptions.
+func (m *SearchOptionsMapper) FromDatabase(dbOpts sqlite.SearchOptions) SearchOptions {
+	return SearchOptions{
+		StartTime: dbOpts.StartTime,
+		EndTime:   dbOpts.EndTime,
+		TaskID:    dbOpts.TaskID,
+		TaskName:  dbOpts.TaskName,
+	}
+}
+
 // Mapper provides a unified interface for all mapping operations.
 type Mapper struct {
-	Task      *TaskMapper
-	TimeEntry *TimeEntryMapper
+	Task          *TaskMapper
+	TimeEntry     *TimeEntryMapper
+	SearchOptions *SearchOptionsMapper
 }
 
 // NewMapper creates a new Mapper instance with all sub-mappers.
 func NewMapper() *Mapper {
 	return &Mapper{
-		Task:      NewTaskMapper(),
-		TimeEntry: NewTimeEntryMapper(),
+		Task:          NewTaskMapper(),
+		TimeEntry:     NewTimeEntryMapper(),
+		SearchOptions: NewSearchOptionsMapper(),
 	}
 }

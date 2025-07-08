@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"time-tracker/internal/api"
-	"time-tracker/internal/repository/sqlite"
+	"time-tracker/internal/domain"
 )
 
 // StartCommand handles the start command
@@ -53,7 +53,7 @@ func (c *StartCommand) createNewTask(taskName string) error {
 // stopRunningTasks marks all running tasks as complete
 func (c *StartCommand) stopRunningTasks() error {
 	// Search for tasks with no end time
-	opts := sqlite.SearchOptions{}
+	opts := domain.SearchOptions{}
 	entries, err := c.api.SearchTimeEntries(opts)
 	if err != nil {
 		return fmt.Errorf("failed to search for running tasks: %w", err)

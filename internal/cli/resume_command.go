@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"time"
 	"time-tracker/internal/api"
-	"time-tracker/internal/repository/sqlite"
+	"time-tracker/internal/domain"
 )
 
 // ResumeCommand handles the resume command
@@ -42,7 +42,7 @@ func (c *ResumeCommand) resumeTask(args []string) error {
 	}
 
 	// Find all time entries in the period, most recent first
-	opts := sqlite.SearchOptions{StartTime: &startTime, EndTime: &now}
+	opts := domain.SearchOptions{StartTime: &startTime, EndTime: &now}
 	entries, err := c.api.SearchTimeEntries(opts)
 	if err != nil {
 		return fmt.Errorf("failed to search time entries: %w", err)
@@ -53,7 +53,7 @@ func (c *ResumeCommand) resumeTask(args []string) error {
 	}
 
 	// Group by task, show most recent entry for each task
-	taskMap := make(map[int64]*sqlite.TimeEntry)
+	taskMap := make(map[int64]*domain.TimeEntry)
 	for i := len(entries) - 1; i >= 0; i-- { // reverse for most recent
 		entry := entries[i]
 		if _, ok := taskMap[entry.TaskID]; !ok {
@@ -110,7 +110,7 @@ func (c *ResumeCommand) resumeTask(args []string) error {
 // stopRunningTasks marks all running tasks as complete
 func (c *ResumeCommand) stopRunningTasks() error {
 	// Search for tasks with no end time
-	opts := sqlite.SearchOptions{}
+	opts := domain.SearchOptions{}
 	entries, err := c.api.SearchTimeEntries(opts)
 	if err != nil {
 		return fmt.Errorf("failed to search for running tasks: %w", err)

@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"time-tracker/internal/api"
-	"time-tracker/internal/repository/sqlite"
+	"time-tracker/internal/domain"
 )
 
 // SummaryCommand handles the summary command
@@ -56,7 +56,7 @@ func (c *SummaryCommand) summaryTask(args []string) error {
 
 	if startTime != nil {
 		// If time filter is specified, find tasks that have ANY entries in the time window
-		timeFilterOpts := sqlite.SearchOptions{
+		timeFilterOpts := domain.SearchOptions{
 			StartTime: startTime,
 			EndTime:   &now,
 		}
@@ -81,7 +81,7 @@ func (c *SummaryCommand) summaryTask(args []string) error {
 		}
 	} else if searchText != "" {
 		// Only text filter, find tasks by name
-		textFilterOpts := sqlite.SearchOptions{
+		textFilterOpts := domain.SearchOptions{
 			TaskName: &searchText,
 		}
 
@@ -169,7 +169,7 @@ func (c *SummaryCommand) showTaskSummary(taskID int64) error {
 	}
 
 	// Get all time entries for this task
-	opts := sqlite.SearchOptions{TaskID: &taskID}
+	opts := domain.SearchOptions{}
 	entries, err := c.api.SearchTimeEntries(opts)
 	if err != nil {
 		return fmt.Errorf("failed to get time entries: %w", err)
