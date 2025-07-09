@@ -5,6 +5,7 @@ import (
 	"time"
 	"time-tracker/internal/domain"
 	"time-tracker/internal/repository/sqlite"
+	"time-tracker/internal/validation"
 )
 
 // API defines the interface for all task and time entry operations.
@@ -33,22 +34,37 @@ type API interface {
 }
 
 type apiImpl struct {
-	repo   sqlite.Repository
-	mapper *domain.Mapper
+	repo            sqlite.Repository
+	mapper          *domain.Mapper
+	taskValidator   *validation.TaskValidator
+	timeEntryValidator *validation.TimeEntryValidator
 }
 
 // New creates a new API instance.
 func New(repo sqlite.Repository) API {
 	return &apiImpl{
-		repo:   repo,
-		mapper: domain.NewMapper(),
+		repo:            repo,
+		mapper:          domain.NewMapper(),
+		taskValidator:   validation.NewTaskValidator(),
+		timeEntryValidator: validation.NewTimeEntryValidator(),
 	}
 }
 
 // Task CRUD implementations
 func (a *apiImpl) CreateTask(name string) (*domain.Task, error) {
-	dbTask := &sqlite.Task{TaskName: name}
-	err := a.repo.CreateTask(dbTask)
+	// Validate input
+	if err := a.taskValidator.ValidateTaskForCreation(name); err != nil {
+		return nil, err
+	}
+	
+	// Get cleaned name
+	cleanedName, err := a.taskValidator.GetValidTaskName(name)
+	if err != nil {
+		return nil, err
+	}
+	
+	dbTask := &sqlite.Task{TaskName: cleanedName}
+	err = a.repo.CreateTask(dbTask)
 	if err != nil {
 		return nil, err
 	}
@@ -57,6 +73,11 @@ func (a *apiImpl) CreateTask(name string) (*domain.Task, error) {
 }
 
 func (a *apiImpl) GetTask(id int64) (*domain.Task, error) {
+	// Validate input
+	if err := a.taskValidator.ValidateTaskID(id); err != nil {
+		return nil, err
+	}
+	
 	dbTask, err := a.repo.GetTask(id)
 	if err != nil {
 		return nil, err
@@ -79,20 +100,41 @@ func (a *apiImpl) ListTasks() ([]*domain.Task, error) {
 }
 
 func (a *apiImpl) UpdateTask(id int64, name string) error {
+	// Validate input
+	if err := a.taskValidator.ValidateTaskForUpdate(id, name); err != nil {
+		return err
+	}
+	
+	// Get cleaned name
+	cleanedName, err := a.taskValidator.GetValidTaskName(name)
+	if err != nil {
+		return err
+	}
+	
 	dbTask, err := a.repo.GetTask(id)
 	if err != nil {
 		return err
 	}
-	dbTask.TaskName = name
+	dbTask.TaskName = cleanedName
 	return a.repo.UpdateTask(dbTask)
 }
 
 func (a *apiImpl) DeleteTask(id int64) error {
+	// Validate input
+	if err := a.taskValidator.ValidateTaskID(id); err != nil {
+		return err
+	}
+	
 	return a.repo.DeleteTask(id)
 }
 
 // TimeEntry CRUD implementations
 func (a *apiImpl) CreateTimeEntry(taskID int64, startTime time.Time, endTime *time.Time) (*domain.TimeEntry, error) {
+	// Validate input
+	if err := a.timeEntryValidator.ValidateTimeEntryForCreation(taskID, startTime, endTime); err != nil {
+		return nil, err
+	}
+	
 	dbEntry := &sqlite.TimeEntry{TaskID: taskID, StartTime: startTime, EndTime: endTime}
 	err := a.repo.CreateTimeEntry(dbEntry)
 	if err != nil {
@@ -103,6 +145,11 @@ func (a *apiImpl) CreateTimeEntry(taskID int64, startTime time.Time, endTime *ti
 }
 
 func (a *apiImpl) GetTimeEntry(id int64) (*domain.TimeEntry, error) {
+	// Validate input
+	if err := a.timeEntryValidator.ValidateTimeEntryID(id); err != nil {
+		return nil, err
+	}
+	
 	dbEntry, err := a.repo.GetTimeEntry(id)
 	if err != nil {
 		return nil, err
@@ -125,6 +172,11 @@ func (a *apiImpl) ListTimeEntries() ([]*domain.TimeEntry, error) {
 }
 
 func (a *apiImpl) SearchTimeEntries(opts domain.SearchOptions) ([]*domain.TimeEntry, error) {
+	// Validate input
+	if err := a.timeEntryValidator.ValidateSearchOptions(opts); err != nil {
+		return nil, err
+	}
+	
 	dbOpts := a.mapper.SearchOptions.ToDatabase(opts)
 	dbEntries, err := a.repo.SearchTimeEntries(dbOpts)
 	if err != nil {
@@ -139,6 +191,11 @@ func (a *apiImpl) SearchTimeEntries(opts domain.SearchOptions) ([]*domain.TimeEn
 }
 
 func (a *apiImpl) UpdateTimeEntry(id int64, startTime time.Time, endTime *time.Time, taskID int64) error {
+	// Validate input
+	if err := a.timeEntryValidator.ValidateTimeEntryForUpdate(id, taskID, startTime, endTime); err != nil {
+		return err
+	}
+	
 	dbEntry, err := a.repo.GetTimeEntry(id)
 	if err != nil {
 		return err
@@ -150,6 +207,11 @@ func (a *apiImpl) UpdateTimeEntry(id int64, startTime time.Time, endTime *time.T
 }
 
 func (a *apiImpl) DeleteTimeEntry(id int64) error {
+	// Validate input
+	if err := a.timeEntryValidator.ValidateTimeEntryID(id); err != nil {
+		return err
+	}
+	
 	return a.repo.DeleteTimeEntry(id)
 }
 
@@ -157,6 +219,11 @@ func (a *apiImpl) DeleteTimeEntry(id int64) error {
 
 // StartTask stops any running tasks and starts a new one for the given taskID.
 func (a *apiImpl) StartTask(taskID int64) (*domain.TimeEntry, error) {
+	// Validate input
+	if err := a.taskValidator.ValidateTaskID(taskID); err != nil {
+		return nil, err
+	}
+	
 	// Stop all running tasks
 	running, _ := a.GetCurrentlyRunningTask()
 	if running != nil {
@@ -179,6 +246,11 @@ func (a *apiImpl) StartTask(taskID int64) (*domain.TimeEntry, error) {
 
 // StopTask sets the EndTime for the given entryID to now.
 func (a *apiImpl) StopTask(entryID int64) error {
+	// Validate input
+	if err := a.timeEntryValidator.ValidateTimeEntryID(entryID); err != nil {
+		return err
+	}
+	
 	dbEntry, err := a.repo.GetTimeEntry(entryID)
 	if err != nil {
 		return err
@@ -193,6 +265,11 @@ func (a *apiImpl) StopTask(entryID int64) error {
 
 // ResumeTask stops any running tasks and starts a new entry for the given taskID.
 func (a *apiImpl) ResumeTask(taskID int64) (*domain.TimeEntry, error) {
+	// Validate input
+	if err := a.taskValidator.ValidateTaskID(taskID); err != nil {
+		return nil, err
+	}
+	
 	running, _ := a.GetCurrentlyRunningTask()
 	if running != nil {
 		err := a.StopTask(running.ID)

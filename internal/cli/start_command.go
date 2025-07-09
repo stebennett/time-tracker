@@ -9,12 +9,16 @@ import (
 
 // StartCommand handles the start command
 type StartCommand struct {
-	api api.API
+	api          api.API
+	errorHandler *ErrorHandler
 }
 
 // NewStartCommand creates a new start command handler
 func NewStartCommand(app *App) *StartCommand {
-	return &StartCommand{api: app.api}
+	return &StartCommand{
+		api:          app.api,
+		errorHandler: NewErrorHandler(),
+	}
 }
 
 // Execute runs the start command
@@ -36,19 +40,20 @@ func (c *StartCommand) createNewTask(taskName string) error {
 	// Always create a new task
 	task, err := c.api.CreateTask(taskName)
 	if err != nil {
-		return fmt.Errorf("failed to create task: %w", err)
+		return c.errorHandler.Handle("create task", err)
 	}
 
 	// Create new time entry
 	now := timeNow()
 	_, err = c.api.CreateTimeEntry(task.ID, now, nil)
 	if err != nil {
-		return fmt.Errorf("failed to create new task: %w", err)
+		return c.errorHandler.Handle("create time entry", err)
 	}
 
 	fmt.Printf("Started new task: %s\n", taskName)
 	return nil
 }
+
 
 // stopRunningTasks marks all running tasks as complete
 func (c *StartCommand) stopRunningTasks() error {
@@ -56,7 +61,7 @@ func (c *StartCommand) stopRunningTasks() error {
 	opts := domain.SearchOptions{}
 	entries, err := c.api.SearchTimeEntries(opts)
 	if err != nil {
-		return fmt.Errorf("failed to search for running tasks: %w", err)
+		return c.errorHandler.Handle("search for running tasks", err)
 	}
 
 	now := timeNow()
@@ -64,7 +69,7 @@ func (c *StartCommand) stopRunningTasks() error {
 		if entry.EndTime == nil {
 			entry.EndTime = &now
 			if err := c.api.UpdateTimeEntry(entry.ID, entry.StartTime, entry.EndTime, entry.TaskID); err != nil {
-				return fmt.Errorf("failed to update task %d: %w", entry.ID, err)
+				return c.errorHandler.Handle(fmt.Sprintf("update task %d", entry.ID), err)
 			}
 		}
 	}
