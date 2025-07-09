@@ -10,6 +10,7 @@ import (
 
 	"time-tracker/internal/api"
 	"time-tracker/internal/domain"
+	"time-tracker/internal/errors"
 )
 
 // DeleteCommand handles the delete command
@@ -103,7 +104,7 @@ func (c *DeleteCommand) deleteTask(args []string) error {
 	}
 	idx, err := strconv.Atoi(input)
 	if err != nil || idx < 1 || idx > len(taskIDs) {
-		return fmt.Errorf("invalid selection")
+		return errors.NewInvalidInputError("selection", input, "invalid selection")
 	}
 	selectedTaskID := taskIDs[idx-1]
 	task, _ := c.api.GetTask(selectedTaskID)

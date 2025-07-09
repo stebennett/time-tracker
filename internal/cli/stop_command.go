@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time-tracker/internal/api"
 	"time-tracker/internal/domain"
+	"time-tracker/internal/errors"
 )
 
 // StopCommand handles the stop command
@@ -19,7 +20,7 @@ func NewStopCommand(app *App) *StopCommand {
 // Execute runs the stop command
 func (c *StopCommand) Execute(args []string) error {
 	if len(args) != 0 {
-		return fmt.Errorf("usage: tt stop")
+		return errors.NewInvalidInputError("command", "stop", "usage: tt stop")
 	}
 	return c.stopRunningTasks()
 }

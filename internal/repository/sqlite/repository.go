@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"time-tracker/internal/errors"
 	"time-tracker/internal/repository/sqlite/migrations"
 
 	_ "modernc.org/sqlite"
@@ -66,13 +67,13 @@ type SQLiteRepository struct {
 func New(dbPath string) (*SQLiteRepository, error) {
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open database: %w", err)
+		return nil, errors.NewDatabaseError("open database", err)
 	}
 
 	// Run migrations
 	if err := migrations.RunMigrations(db); err != nil {
 		db.Close()
-		return nil, fmt.Errorf("failed to run migrations: %w", err)
+		return nil, errors.NewDatabaseError("run migrations", err)
 	}
 
 	return &SQLiteRepository{db: db}, nil
@@ -91,12 +92,12 @@ func (r *SQLiteRepository) CreateTimeEntry(entry *TimeEntry) error {
 
 	result, err := r.db.Exec(query, formatTimeForDB(entry.StartTime), formatTimePtrForDB(entry.EndTime), entry.TaskID)
 	if err != nil {
-		return fmt.Errorf("failed to create time entry: %w", err)
+		return errors.NewDatabaseError("create time entry", err)
 	}
 
 	id, err := result.LastInsertId()
 	if err != nil {
-		return fmt.Errorf("failed to get last insert ID: %w", err)
+		return errors.NewDatabaseError("get last insert ID", err)
 	}
 
 	entry.ID = id
@@ -120,10 +121,10 @@ func (r *SQLiteRepository) GetTimeEntry(id int64) (*TimeEntry, error) {
 		&entry.TaskID,
 	)
 	if err == sql.ErrNoRows {
-		return nil, fmt.Errorf("time entry not found: %d", id)
+		return nil, errors.NewNotFoundError("time entry", fmt.Sprintf("%d", id))
 	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to get time entry: %w", err)
+		return nil, errors.NewDatabaseError("get time entry", err)
 	}
 
 	if endTime.Valid {
@@ -142,7 +143,7 @@ func (r *SQLiteRepository) ListTimeEntries() ([]*TimeEntry, error) {
 
 	rows, err := r.db.Query(query)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query time entries: %w", err)
+		return nil, errors.NewDatabaseError("query time entries", err)
 	}
 	defer rows.Close()
 
@@ -158,7 +159,7 @@ func (r *SQLiteRepository) ListTimeEntries() ([]*TimeEntry, error) {
 			&entry.TaskID,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("failed to scan time entry: %w", err)
+			return nil, errors.NewDatabaseError("scan time entry", err)
 		}
 
 		if endTime.Valid {
@@ -169,7 +170,7 @@ func (r *SQLiteRepository) ListTimeEntries() ([]*TimeEntry, error) {
 	}
 
 	if err = rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating time entries: %w", err)
+		return nil, errors.NewDatabaseError("iterate time entries", err)
 	}
 
 	return entries, nil
@@ -184,15 +185,15 @@ func (r *SQLiteRepository) UpdateTimeEntry(entry *TimeEntry) error {
 
 	result, err := r.db.Exec(query, formatTimeForDB(entry.StartTime), formatTimePtrForDB(entry.EndTime), entry.TaskID, entry.ID)
 	if err != nil {
-		return fmt.Errorf("failed to update time entry: %w", err)
+		return errors.NewDatabaseError("update time entry", err)
 	}
 
 	rows, err := result.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("failed to get rows affected: %w", err)
+		return errors.NewDatabaseError("get rows affected", err)
 	}
 	if rows == 0 {
-		return fmt.Errorf("time entry not found: %d", entry.ID)
+		return errors.NewNotFoundError("time entry", fmt.Sprintf("%d", entry.ID))
 	}
 
 	return nil
@@ -204,15 +205,15 @@ func (r *SQLiteRepository) DeleteTimeEntry(id int64) error {
 
 	result, err := r.db.Exec(query, id)
 	if err != nil {
-		return fmt.Errorf("failed to delete time entry: %w", err)
+		return errors.NewDatabaseError("delete time entry", err)
 	}
 
 	rows, err := result.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("failed to get rows affected: %w", err)
+		return errors.NewDatabaseError("get rows affected", err)
 	}
 	if rows == 0 {
-		return fmt.Errorf("time entry not found: %d", id)
+		return errors.NewNotFoundError("time entry", fmt.Sprintf("%d", id))
 	}
 
 	return nil
@@ -223,11 +224,11 @@ func (r *SQLiteRepository) CreateTask(task *Task) error {
 	query := `INSERT INTO tasks (task_name) VALUES (?)`
 	result, err := r.db.Exec(query, task.TaskName)
 	if err != nil {
-		return fmt.Errorf("failed to create task: %w", err)
+		return errors.NewDatabaseError("create task", err)
 	}
 	task.ID, err = result.LastInsertId()
 	if err != nil {
-		return fmt.Errorf("failed to get last insert ID: %w", err)
+		return errors.NewDatabaseError("get last insert ID", err)
 	}
 	return nil
 }
@@ -238,10 +239,10 @@ func (r *SQLiteRepository) GetTask(id int64) (*Task, error) {
 	task := &Task{}
 	err := r.db.QueryRow(query, id).Scan(&task.ID, &task.TaskName)
 	if err == sql.ErrNoRows {
-		return nil, fmt.Errorf("task not found: %d", id)
+		return nil, errors.NewNotFoundError("task", fmt.Sprintf("%d", id))
 	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to get task: %w", err)
+		return nil, errors.NewDatabaseError("get task", err)
 	}
 	return task, nil
 }
@@ -251,7 +252,7 @@ func (r *SQLiteRepository) ListTasks() ([]*Task, error) {
 	query := `SELECT id, task_name FROM tasks ORDER BY task_name ASC`
 	rows, err := r.db.Query(query)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query tasks: %w", err)
+		return nil, errors.NewDatabaseError("query tasks", err)
 	}
 	defer rows.Close()
 
@@ -260,12 +261,12 @@ func (r *SQLiteRepository) ListTasks() ([]*Task, error) {
 		task := &Task{}
 		err := rows.Scan(&task.ID, &task.TaskName)
 		if err != nil {
-			return nil, fmt.Errorf("failed to scan task: %w", err)
+			return nil, errors.NewDatabaseError("scan task", err)
 		}
 		tasks = append(tasks, task)
 	}
 	if err = rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating tasks: %w", err)
+		return nil, errors.NewDatabaseError("iterate tasks", err)
 	}
 	return tasks, nil
 }
@@ -275,14 +276,14 @@ func (r *SQLiteRepository) UpdateTask(task *Task) error {
 	query := `UPDATE tasks SET task_name = ? WHERE id = ?`
 	result, err := r.db.Exec(query, task.TaskName, task.ID)
 	if err != nil {
-		return fmt.Errorf("failed to update task: %w", err)
+		return errors.NewDatabaseError("update task", err)
 	}
 	rows, err := result.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("failed to get rows affected: %w", err)
+		return errors.NewDatabaseError("get rows affected", err)
 	}
 	if rows == 0 {
-		return fmt.Errorf("task not found: %d", task.ID)
+		return errors.NewNotFoundError("task", fmt.Sprintf("%d", task.ID))
 	}
 	return nil
 }
@@ -292,14 +293,14 @@ func (r *SQLiteRepository) DeleteTask(id int64) error {
 	query := `DELETE FROM tasks WHERE id = ?`
 	result, err := r.db.Exec(query, id)
 	if err != nil {
-		return fmt.Errorf("failed to delete task: %w", err)
+		return errors.NewDatabaseError("delete task", err)
 	}
 	rows, err := result.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("failed to get rows affected: %w", err)
+		return errors.NewDatabaseError("get rows affected", err)
 	}
 	if rows == 0 {
-		return fmt.Errorf("task not found: %d", id)
+		return errors.NewNotFoundError("task", fmt.Sprintf("%d", id))
 	}
 	return nil
 }
@@ -359,7 +360,7 @@ func (r *SQLiteRepository) SearchTimeEntries(opts SearchOptions) ([]*TimeEntry, 
 	// Execute the query
 	rows, err := r.db.Query(query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to search time entries: %w", err)
+		return nil, errors.NewDatabaseError("search time entries", err)
 	}
 	defer rows.Close()
 
@@ -374,7 +375,7 @@ func (r *SQLiteRepository) SearchTimeEntries(opts SearchOptions) ([]*TimeEntry, 
 			&entry.TaskID,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("failed to scan time entry: %w", err)
+			return nil, errors.NewDatabaseError("scan time entry", err)
 		}
 		if endTime.Valid {
 			entry.EndTime = &endTime.Time
@@ -382,7 +383,7 @@ func (r *SQLiteRepository) SearchTimeEntries(opts SearchOptions) ([]*TimeEntry, 
 		entries = append(entries, entry)
 	}
 	if err = rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating time entries: %w", err)
+		return nil, errors.NewDatabaseError("iterate time entries", err)
 	}
 	return entries, nil
 }

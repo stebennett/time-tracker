@@ -1,9 +1,9 @@
 package api
 
 import (
-	"errors"
 	"time"
 	"time-tracker/internal/domain"
+	"time-tracker/internal/errors"
 	"time-tracker/internal/repository/sqlite"
 	"time-tracker/internal/validation"
 )
@@ -256,7 +256,7 @@ func (a *apiImpl) StopTask(entryID int64) error {
 		return err
 	}
 	if dbEntry.EndTime != nil {
-		return errors.New("task already stopped")
+		return errors.NewValidationError("task already stopped", nil)
 	}
 	now := time.Now()
 	dbEntry.EndTime = &now
@@ -301,7 +301,7 @@ func (a *apiImpl) GetCurrentlyRunningTask() (*domain.TimeEntry, error) {
 			return &domainEntry, nil
 		}
 	}
-	return nil, errors.New("no running task")
+	return nil, errors.NewNotFoundError("running task", "")
 }
 
 // ListTodayTasks returns all tasks with time entries for today.

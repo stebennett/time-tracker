@@ -1,6 +1,8 @@
 package cli
 
-import "fmt"
+import (
+	"time-tracker/internal/errors"
+)
 
 // Command represents a CLI command
 type Command interface {
@@ -40,7 +42,7 @@ func (r *CommandRegistry) Register(name string, command Command) {
 func (r *CommandRegistry) Execute(commandName string, args []string) error {
 	command, exists := r.commands[commandName]
 	if !exists {
-		return fmt.Errorf("unknown command: %s", commandName)
+		return errors.NewInvalidInputError("command", commandName, "unknown command")
 	}
 	return command.Execute(args)
 }

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 	"time-tracker/internal/api"
+	"time-tracker/internal/errors"
 )
 
 // OutputCommand handles the output command
@@ -28,13 +29,13 @@ func (c *OutputCommand) Execute(args []string) error {
 // outputTasks outputs tasks in the specified format
 func (c *OutputCommand) outputTasks(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: tt output format=csv")
+		return errors.NewInvalidInputError("command", "output", "usage: tt output format=csv")
 	}
 
 	// Parse format option
 	format := args[0]
 	if !strings.HasPrefix(format, "format=") {
-		return fmt.Errorf("invalid format option: %s", format)
+		return errors.NewInvalidInputError("format", format, "invalid format option")
 	}
 
 	format = strings.TrimPrefix(format, "format=")
@@ -42,7 +43,7 @@ func (c *OutputCommand) outputTasks(args []string) error {
 	case "csv":
 		return c.outputCSV()
 	default:
-		return fmt.Errorf("unsupported format: %s", format)
+		return errors.NewInvalidInputError("format", format, "unsupported format")
 	}
 }
 

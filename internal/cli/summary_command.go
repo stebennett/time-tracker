@@ -10,6 +10,7 @@ import (
 
 	"time-tracker/internal/api"
 	"time-tracker/internal/domain"
+	"time-tracker/internal/errors"
 )
 
 // SummaryCommand handles the summary command
@@ -153,7 +154,7 @@ func (c *SummaryCommand) summaryTask(args []string) error {
 	}
 	idx, err := strconv.Atoi(input)
 	if err != nil || idx < 1 || idx > len(matchingTaskIDs) {
-		return fmt.Errorf("invalid selection")
+		return errors.NewInvalidInputError("selection", input, "invalid selection")
 	}
 	selectedTaskID := matchingTaskIDs[idx-1]
 
@@ -176,7 +177,7 @@ func (c *SummaryCommand) showTaskSummary(taskID int64) error {
 	}
 
 	if len(entries) == 0 {
-		return fmt.Errorf("no time entries found for task")
+		return errors.NewNotFoundError("time entries", fmt.Sprintf("task %d", taskID))
 	}
 
 	// Sort entries by start time

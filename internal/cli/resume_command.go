@@ -8,6 +8,7 @@ import (
 	"time"
 	"time-tracker/internal/api"
 	"time-tracker/internal/domain"
+	"time-tracker/internal/errors"
 )
 
 // ResumeCommand handles the resume command
@@ -33,7 +34,7 @@ func (c *ResumeCommand) resumeTask(args []string) error {
 	if len(args) > 0 {
 		dur, err := parseTimeShorthand(args[0])
 		if err != nil {
-			return fmt.Errorf("invalid time shorthand: %v", err)
+			return errors.NewInvalidInputError("time_shorthand", args[0], "invalid time shorthand")
 		}
 		startTime = now.Add(-dur)
 	} else {
@@ -88,7 +89,7 @@ func (c *ResumeCommand) resumeTask(args []string) error {
 	}
 	idx, err := strconv.Atoi(input)
 	if err != nil || idx < 1 || idx > len(taskIDs) {
-		return fmt.Errorf("invalid selection")
+		return errors.NewInvalidInputError("selection", input, "invalid selection")
 	}
 	selectedTaskID := taskIDs[idx-1]
 

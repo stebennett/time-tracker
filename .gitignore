@@ -38,6 +38,8 @@ bin/
 dist/
 tt
 tt.exe
+tt-test
+tt-test.exe
 
 # Environment files
 .env

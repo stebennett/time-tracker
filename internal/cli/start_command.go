@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time-tracker/internal/api"
 	"time-tracker/internal/domain"
+	"time-tracker/internal/errors"
 )
 
 // StartCommand handles the start command
@@ -24,7 +25,7 @@ func NewStartCommand(app *App) *StartCommand {
 // Execute runs the start command
 func (c *StartCommand) Execute(args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf("usage: tt start \"your text here\"")
+		return errors.NewInvalidInputError("command", "start", "usage: tt start \"your text here\"")
 	}
 	text := strings.Join(args, " ")
 	return c.createNewTask(text)

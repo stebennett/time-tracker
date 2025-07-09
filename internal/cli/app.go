@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"time-tracker/internal/api"
+	"time-tracker/internal/errors"
 	"time-tracker/internal/repository/sqlite"
 )
 
@@ -81,7 +82,7 @@ func NewAppWithDefaultRepository() (*App, error) {
 // Run executes the CLI application with the given arguments
 func (a *App) Run(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("%s", a.registry.GetUsage())
+		return errors.NewInvalidInputError("command", "", a.registry.GetUsage())
 	}
 
 	commandName := args[0]
@@ -95,12 +96,12 @@ func parseTimeShorthand(shorthand string) (time.Duration, error) {
 	re := regexp.MustCompile(`^(\d+)(m|h|d|w|mo|y)$`)
 	matches := re.FindStringSubmatch(shorthand)
 	if matches == nil {
-		return 0, fmt.Errorf("invalid time format: %s", shorthand)
+		return 0, errors.NewInvalidInputError("time_format", shorthand, "invalid time format")
 	}
 
 	value, err := strconv.Atoi(matches[1])
 	if err != nil {
-		return 0, fmt.Errorf("invalid number in time format: %s", shorthand)
+		return 0, errors.NewInvalidInputError("time_number", shorthand, "invalid number in time format")
 	}
 
 	unit := matches[2]
@@ -120,7 +121,7 @@ func parseTimeShorthand(shorthand string) (time.Duration, error) {
 	case "y":
 		duration = time.Duration(value) * 365 * 24 * time.Hour
 	default:
-		return 0, fmt.Errorf("invalid time unit: %s", unit)
+		return 0, errors.NewInvalidInputError("time_unit", unit, "invalid time unit")
 	}
 
 	return duration, nil
