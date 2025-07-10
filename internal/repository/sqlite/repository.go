@@ -12,18 +12,6 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// formatTimeForDB formats a time.Time value as RFC3339 string for consistent database storage
-func formatTimeForDB(t time.Time) string {
-	return t.Format(time.RFC3339)
-}
-
-// formatTimePtrForDB formats a *time.Time value as RFC3339 string, returning nil if the pointer is nil
-func formatTimePtrForDB(t *time.Time) interface{} {
-	if t == nil {
-		return nil
-	}
-	return formatTimeForDB(*t)
-}
 
 // SearchOptions contains all possible search parameters
 type SearchOptions struct {
@@ -90,14 +78,9 @@ func (r *SQLiteRepository) CreateTimeEntry(entry *TimeEntry) error {
 	INSERT INTO time_entries (start_time, end_time, task_id)
 	VALUES (?, ?, ?)`
 
-	result, err := r.db.Exec(query, formatTimeForDB(entry.StartTime), formatTimePtrForDB(entry.EndTime), entry.TaskID)
+	id, err := ExecuteWithLastInsertID(r.db, query, FormatTimeForDB(entry.StartTime), FormatTimePtrForDB(entry.EndTime), entry.TaskID)
 	if err != nil {
-		return errors.NewDatabaseError("create time entry", err)
-	}
-
-	id, err := result.LastInsertId()
-	if err != nil {
-		return errors.NewDatabaseError("get last insert ID", err)
+		return err
 	}
 
 	entry.ID = id
@@ -111,27 +94,7 @@ func (r *SQLiteRepository) GetTimeEntry(id int64) (*TimeEntry, error) {
 	FROM time_entries
 	WHERE id = ?`
 
-	entry := &TimeEntry{}
-	var endTime sql.NullTime
-
-	err := r.db.QueryRow(query, id).Scan(
-		&entry.ID,
-		&entry.StartTime,
-		&endTime,
-		&entry.TaskID,
-	)
-	if err == sql.ErrNoRows {
-		return nil, errors.NewNotFoundError("time entry", fmt.Sprintf("%d", id))
-	}
-	if err != nil {
-		return nil, errors.NewDatabaseError("get time entry", err)
-	}
-
-	if endTime.Valid {
-		entry.EndTime = &endTime.Time
-	}
-
-	return entry, nil
+	return QuerySingle(r.db, query, ScanTimeEntry, "time entry", fmt.Sprintf("%d", id), id)
 }
 
 // ListTimeEntries retrieves all time entries
@@ -141,39 +104,7 @@ func (r *SQLiteRepository) ListTimeEntries() ([]*TimeEntry, error) {
 	FROM time_entries
 	ORDER BY start_time ASC`
 
-	rows, err := r.db.Query(query)
-	if err != nil {
-		return nil, errors.NewDatabaseError("query time entries", err)
-	}
-	defer rows.Close()
-
-	var entries []*TimeEntry
-	for rows.Next() {
-		entry := &TimeEntry{}
-		var endTime sql.NullTime
-
-		err := rows.Scan(
-			&entry.ID,
-			&entry.StartTime,
-			&endTime,
-			&entry.TaskID,
-		)
-		if err != nil {
-			return nil, errors.NewDatabaseError("scan time entry", err)
-		}
-
-		if endTime.Valid {
-			entry.EndTime = &endTime.Time
-		}
-
-		entries = append(entries, entry)
-	}
-
-	if err = rows.Err(); err != nil {
-		return nil, errors.NewDatabaseError("iterate time entries", err)
-	}
-
-	return entries, nil
+	return QueryMultiple(r.db, query, ScanTimeEntries, "time entries")
 }
 
 // UpdateTimeEntry updates an existing time entry
@@ -183,126 +114,48 @@ func (r *SQLiteRepository) UpdateTimeEntry(entry *TimeEntry) error {
 	SET start_time = ?, end_time = ?, task_id = ?
 	WHERE id = ?`
 
-	result, err := r.db.Exec(query, formatTimeForDB(entry.StartTime), formatTimePtrForDB(entry.EndTime), entry.TaskID, entry.ID)
-	if err != nil {
-		return errors.NewDatabaseError("update time entry", err)
-	}
-
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return errors.NewDatabaseError("get rows affected", err)
-	}
-	if rows == 0 {
-		return errors.NewNotFoundError("time entry", fmt.Sprintf("%d", entry.ID))
-	}
-
-	return nil
+	return ExecuteWithRowsAffected(r.db, query, "time entry", fmt.Sprintf("%d", entry.ID), FormatTimeForDB(entry.StartTime), FormatTimePtrForDB(entry.EndTime), entry.TaskID, entry.ID)
 }
 
 // DeleteTimeEntry deletes a time entry by ID
 func (r *SQLiteRepository) DeleteTimeEntry(id int64) error {
 	query := `DELETE FROM time_entries WHERE id = ?`
-
-	result, err := r.db.Exec(query, id)
-	if err != nil {
-		return errors.NewDatabaseError("delete time entry", err)
-	}
-
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return errors.NewDatabaseError("get rows affected", err)
-	}
-	if rows == 0 {
-		return errors.NewNotFoundError("time entry", fmt.Sprintf("%d", id))
-	}
-
-	return nil
+	return ExecuteWithRowsAffected(r.db, query, "time entry", fmt.Sprintf("%d", id), id)
 }
 
 // CreateTask creates a new task
 func (r *SQLiteRepository) CreateTask(task *Task) error {
 	query := `INSERT INTO tasks (task_name) VALUES (?)`
-	result, err := r.db.Exec(query, task.TaskName)
+	id, err := ExecuteWithLastInsertID(r.db, query, task.TaskName)
 	if err != nil {
-		return errors.NewDatabaseError("create task", err)
+		return err
 	}
-	task.ID, err = result.LastInsertId()
-	if err != nil {
-		return errors.NewDatabaseError("get last insert ID", err)
-	}
+	task.ID = id
 	return nil
 }
 
 // GetTask retrieves a task by ID
 func (r *SQLiteRepository) GetTask(id int64) (*Task, error) {
 	query := `SELECT id, task_name FROM tasks WHERE id = ?`
-	task := &Task{}
-	err := r.db.QueryRow(query, id).Scan(&task.ID, &task.TaskName)
-	if err == sql.ErrNoRows {
-		return nil, errors.NewNotFoundError("task", fmt.Sprintf("%d", id))
-	}
-	if err != nil {
-		return nil, errors.NewDatabaseError("get task", err)
-	}
-	return task, nil
+	return QuerySingle(r.db, query, ScanTask, "task", fmt.Sprintf("%d", id), id)
 }
 
 // ListTasks retrieves all tasks
 func (r *SQLiteRepository) ListTasks() ([]*Task, error) {
 	query := `SELECT id, task_name FROM tasks ORDER BY task_name ASC`
-	rows, err := r.db.Query(query)
-	if err != nil {
-		return nil, errors.NewDatabaseError("query tasks", err)
-	}
-	defer rows.Close()
-
-	var tasks []*Task
-	for rows.Next() {
-		task := &Task{}
-		err := rows.Scan(&task.ID, &task.TaskName)
-		if err != nil {
-			return nil, errors.NewDatabaseError("scan task", err)
-		}
-		tasks = append(tasks, task)
-	}
-	if err = rows.Err(); err != nil {
-		return nil, errors.NewDatabaseError("iterate tasks", err)
-	}
-	return tasks, nil
+	return QueryMultiple(r.db, query, ScanTasks, "tasks")
 }
 
 // UpdateTask updates an existing task
 func (r *SQLiteRepository) UpdateTask(task *Task) error {
 	query := `UPDATE tasks SET task_name = ? WHERE id = ?`
-	result, err := r.db.Exec(query, task.TaskName, task.ID)
-	if err != nil {
-		return errors.NewDatabaseError("update task", err)
-	}
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return errors.NewDatabaseError("get rows affected", err)
-	}
-	if rows == 0 {
-		return errors.NewNotFoundError("task", fmt.Sprintf("%d", task.ID))
-	}
-	return nil
+	return ExecuteWithRowsAffected(r.db, query, "task", fmt.Sprintf("%d", task.ID), task.TaskName, task.ID)
 }
 
 // DeleteTask deletes a task by ID
 func (r *SQLiteRepository) DeleteTask(id int64) error {
 	query := `DELETE FROM tasks WHERE id = ?`
-	result, err := r.db.Exec(query, id)
-	if err != nil {
-		return errors.NewDatabaseError("delete task", err)
-	}
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return errors.NewDatabaseError("get rows affected", err)
-	}
-	if rows == 0 {
-		return errors.NewNotFoundError("task", fmt.Sprintf("%d", id))
-	}
-	return nil
+	return ExecuteWithRowsAffected(r.db, query, "task", fmt.Sprintf("%d", id), id)
 }
 
 // SearchTimeEntries searches for time entries based on the provided options
@@ -315,14 +168,14 @@ func (r *SQLiteRepository) SearchTimeEntries(opts SearchOptions) ([]*TimeEntry, 
 		timeCondition := "("
 		if opts.StartTime != nil {
 			timeCondition += "start_time >= ?"
-			args = append(args, formatTimePtrForDB(opts.StartTime))
+			args = append(args, FormatTimePtrForDB(opts.StartTime))
 		}
 		if opts.StartTime != nil && opts.EndTime != nil {
 			timeCondition += " AND "
 		}
 		if opts.EndTime != nil {
 			timeCondition += "start_time <= ?"
-			args = append(args, formatTimePtrForDB(opts.EndTime))
+			args = append(args, FormatTimePtrForDB(opts.EndTime))
 		}
 		timeCondition += ")"
 		conditions = append(conditions, timeCondition)
@@ -358,32 +211,5 @@ func (r *SQLiteRepository) SearchTimeEntries(opts SearchOptions) ([]*TimeEntry, 
 	query += " ORDER BY start_time ASC"
 
 	// Execute the query
-	rows, err := r.db.Query(query, args...)
-	if err != nil {
-		return nil, errors.NewDatabaseError("search time entries", err)
-	}
-	defer rows.Close()
-
-	var entries []*TimeEntry
-	for rows.Next() {
-		entry := &TimeEntry{}
-		var endTime sql.NullTime
-		err := rows.Scan(
-			&entry.ID,
-			&entry.StartTime,
-			&endTime,
-			&entry.TaskID,
-		)
-		if err != nil {
-			return nil, errors.NewDatabaseError("scan time entry", err)
-		}
-		if endTime.Valid {
-			entry.EndTime = &endTime.Time
-		}
-		entries = append(entries, entry)
-	}
-	if err = rows.Err(); err != nil {
-		return nil, errors.NewDatabaseError("iterate time entries", err)
-	}
-	return entries, nil
+	return QueryMultiple(r.db, query, ScanTimeEntries, "time entries", args...)
 }
