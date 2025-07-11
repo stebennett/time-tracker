@@ -1,6 +1,7 @@
 package config
 
 import (
+	"context"
 	"os"
 	"testing"
 
@@ -128,9 +129,9 @@ func TestRepositoryFactory_CreateRepository_Development(t *testing.T) {
 	defer repo.Close()
 
 	// Test that we can use the repository
-	repo.CreateTask(&sqlite.Task{TaskName: "Test Task"})
+	repo.CreateTask(context.Background(), &sqlite.Task{TaskName: "Test Task"})
 
-	tasks, err := repo.ListTasks()
+	tasks, err := repo.ListTasks(context.Background())
 	if err != nil {
 		t.Fatalf("ListTasks() error = %v", err)
 	}
@@ -155,9 +156,9 @@ func TestRepositoryFactory_CreateRepository_Testing(t *testing.T) {
 	defer repo.Close()
 
 	// Test that we can use the repository
-	repo.CreateTask(&sqlite.Task{TaskName: "Test Task"})
+	repo.CreateTask(context.Background(), &sqlite.Task{TaskName: "Test Task"})
 
-	tasks, err := repo.ListTasks()
+	tasks, err := repo.ListTasks(context.Background())
 	if err != nil {
 		t.Fatalf("ListTasks() error = %v", err)
 	}

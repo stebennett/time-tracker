@@ -1,6 +1,7 @@
 package sqlite
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -38,7 +39,7 @@ func TestCreateTimeEntry(t *testing.T) {
 	defer cleanup()
 
 	task := &Task{TaskName: "Test entry"}
-	err := repo.CreateTask(task)
+	err := repo.CreateTask(context.Background(), task)
 	require.NoError(t, err)
 	assert.Greater(t, task.ID, int64(0))
 
@@ -49,12 +50,12 @@ func TestCreateTimeEntry(t *testing.T) {
 	}
 
 	// Test creating entry
-	err = repo.CreateTimeEntry(entry)
+	err = repo.CreateTimeEntry(context.Background(), entry)
 	require.NoError(t, err)
 	assert.Greater(t, entry.ID, int64(0))
 
 	// Verify entry was created
-	retrieved, err := repo.GetTimeEntry(entry.ID)
+	retrieved, err := repo.GetTimeEntry(context.Background(), entry.ID)
 	require.NoError(t, err)
 	assert.Equal(t, entry.ID, retrieved.ID)
 	assert.Equal(t, entry.StartTime.Unix(), retrieved.StartTime.Unix())
@@ -67,13 +68,13 @@ func TestGetTimeEntry(t *testing.T) {
 	defer cleanup()
 
 	// Test getting non-existent entry
-	_, err := repo.GetTimeEntry(999)
+	_, err := repo.GetTimeEntry(context.Background(), 999)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
 
 	// Create and get entry
 	task := &Task{TaskName: "Test entry"}
-	err = repo.CreateTask(task)
+	err = repo.CreateTask(context.Background(), task)
 	require.NoError(t, err)
 
 	now := time.Now()
@@ -81,10 +82,10 @@ func TestGetTimeEntry(t *testing.T) {
 		StartTime: now,
 		TaskID:    task.ID,
 	}
-	err = repo.CreateTimeEntry(entry)
+	err = repo.CreateTimeEntry(context.Background(), entry)
 	require.NoError(t, err)
 
-	retrieved, err := repo.GetTimeEntry(entry.ID)
+	retrieved, err := repo.GetTimeEntry(context.Background(), entry.ID)
 	require.NoError(t, err)
 	assert.Equal(t, entry.ID, retrieved.ID)
 	assert.Equal(t, entry.StartTime.Unix(), retrieved.StartTime.Unix())
@@ -96,7 +97,7 @@ func TestListTimeEntries(t *testing.T) {
 	defer cleanup()
 
 	task := &Task{TaskName: "Test task"}
-	err := repo.CreateTask(task)
+	err := repo.CreateTask(context.Background(), task)
 	require.NoError(t, err)
 
 	// Create multiple entries
@@ -107,12 +108,12 @@ func TestListTimeEntries(t *testing.T) {
 	}
 
 	for _, entry := range entries {
-		err := repo.CreateTimeEntry(entry)
+		err := repo.CreateTimeEntry(context.Background(), entry)
 		require.NoError(t, err)
 	}
 
 	// Test listing entries
-	retrieved, err := repo.ListTimeEntries()
+	retrieved, err := repo.ListTimeEntries(context.Background())
 	require.NoError(t, err)
 	assert.Len(t, retrieved, 3)
 
@@ -126,7 +127,7 @@ func TestUpdateTimeEntry(t *testing.T) {
 	defer cleanup()
 
 	task := &Task{TaskName: "Original task"}
-	err := repo.CreateTask(task)
+	err := repo.CreateTask(context.Background(), task)
 	require.NoError(t, err)
 
 	// Create entry
@@ -135,7 +136,7 @@ func TestUpdateTimeEntry(t *testing.T) {
 		StartTime: now,
 		TaskID:    task.ID,
 	}
-	err = repo.CreateTimeEntry(entry)
+	err = repo.CreateTimeEntry(context.Background(), entry)
 	require.NoError(t, err)
 
 	// Update entry
@@ -145,11 +146,11 @@ func TestUpdateTimeEntry(t *testing.T) {
 	entry.EndTime = &endTime
 	entry.TaskID = task.ID
 
-	err = repo.UpdateTimeEntry(entry)
+	err = repo.UpdateTimeEntry(context.Background(), entry)
 	require.NoError(t, err)
 
 	// Verify update
-	retrieved, err := repo.GetTimeEntry(entry.ID)
+	retrieved, err := repo.GetTimeEntry(context.Background(), entry.ID)
 	require.NoError(t, err)
 	assert.Equal(t, newTime.Unix(), retrieved.StartTime.Unix())
 	assert.Equal(t, endTime.Unix(), retrieved.EndTime.Unix())
@@ -157,7 +158,7 @@ func TestUpdateTimeEntry(t *testing.T) {
 
 	// Test updating non-existent entry
 	nonExistent := &TimeEntry{ID: 999, TaskID: task.ID}
-	err = repo.UpdateTimeEntry(nonExistent)
+	err = repo.UpdateTimeEntry(context.Background(), nonExistent)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
 }
@@ -167,7 +168,7 @@ func TestDeleteTimeEntry(t *testing.T) {
 	defer cleanup()
 
 	task := &Task{TaskName: "Test task"}
-	err := repo.CreateTask(task)
+	err := repo.CreateTask(context.Background(), task)
 	require.NoError(t, err)
 
 	// Create entry
@@ -175,20 +176,20 @@ func TestDeleteTimeEntry(t *testing.T) {
 		StartTime: time.Now(),
 		TaskID:    task.ID,
 	}
-	err = repo.CreateTimeEntry(entry)
+	err = repo.CreateTimeEntry(context.Background(), entry)
 	require.NoError(t, err)
 
 	// Delete entry
-	err = repo.DeleteTimeEntry(entry.ID)
+	err = repo.DeleteTimeEntry(context.Background(), entry.ID)
 	require.NoError(t, err)
 
 	// Verify deletion
-	_, err = repo.GetTimeEntry(entry.ID)
+	_, err = repo.GetTimeEntry(context.Background(), entry.ID)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
 
 	// Test deleting non-existent entry
-	err = repo.DeleteTimeEntry(999)
+	err = repo.DeleteTimeEntry(context.Background(), 999)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
 }
@@ -201,9 +202,9 @@ func TestSearchTimeEntries(t *testing.T) {
 	task1 := &Task{TaskName: "First meeting"}
 	task2 := &Task{TaskName: "Second meeting"}
 	task3 := &Task{TaskName: "Third meeting"}
-	require.NoError(t, repo.CreateTask(task1))
-	require.NoError(t, repo.CreateTask(task2))
-	require.NoError(t, repo.CreateTask(task3))
+	require.NoError(t, repo.CreateTask(context.Background(), task1))
+	require.NoError(t, repo.CreateTask(context.Background(), task2))
+	require.NoError(t, repo.CreateTask(context.Background(), task3))
 
 	now := time.Now()
 	startTime1 := now.Add(-2 * time.Hour)
@@ -230,7 +231,7 @@ func TestSearchTimeEntries(t *testing.T) {
 	}
 
 	for _, entry := range entries {
-		err := repo.CreateTimeEntry(entry)
+		err := repo.CreateTimeEntry(context.Background(), entry)
 		require.NoError(t, err)
 	}
 
@@ -282,7 +283,7 @@ func TestSearchTimeEntries(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			results, err := repo.SearchTimeEntries(tt.opts)
+			results, err := repo.SearchTimeEntries(context.Background(), tt.opts)
 			require.NoError(t, err)
 			assert.Len(t, results, tt.expected)
 
@@ -312,7 +313,7 @@ func TestTimeFormatting(t *testing.T) {
 
 	// Create a task
 	task := &Task{TaskName: "Test task"}
-	err := repo.CreateTask(task)
+	err := repo.CreateTask(context.Background(), task)
 	require.NoError(t, err)
 
 	// Create a time entry with a specific time
@@ -322,11 +323,11 @@ func TestTimeFormatting(t *testing.T) {
 		TaskID:    task.ID,
 	}
 
-	err = repo.CreateTimeEntry(entry)
+	err = repo.CreateTimeEntry(context.Background(), entry)
 	require.NoError(t, err)
 
 	// Retrieve the entry
-	retrieved, err := repo.GetTimeEntry(entry.ID)
+	retrieved, err := repo.GetTimeEntry(context.Background(), entry.ID)
 	require.NoError(t, err)
 
 	// Verify the time is stored correctly

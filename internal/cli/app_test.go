@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"sort"
@@ -30,7 +31,7 @@ func newMockAPI() *mockAPI {
 	}
 }
 
-func (m *mockAPI) CreateTask(name string) (*domain.Task, error) {
+func (m *mockAPI) CreateTask(ctx context.Context, name string) (*domain.Task, error) {
 	task := &domain.Task{
 		ID:       m.nextTaskID,
 		TaskName: name,
@@ -40,7 +41,7 @@ func (m *mockAPI) CreateTask(name string) (*domain.Task, error) {
 	return task, nil
 }
 
-func (m *mockAPI) GetTask(id int64) (*domain.Task, error) {
+func (m *mockAPI) GetTask(ctx context.Context, id int64) (*domain.Task, error) {
 	task, exists := m.tasks[id]
 	if !exists {
 		return nil, fmt.Errorf("task not found: %d", id)
@@ -48,7 +49,7 @@ func (m *mockAPI) GetTask(id int64) (*domain.Task, error) {
 	return task, nil
 }
 
-func (m *mockAPI) ListTasks() ([]*domain.Task, error) {
+func (m *mockAPI) ListTasks(ctx context.Context) ([]*domain.Task, error) {
 	tasks := make([]*domain.Task, 0, len(m.tasks))
 	for _, task := range m.tasks {
 		tasks = append(tasks, task)
@@ -60,7 +61,7 @@ func (m *mockAPI) ListTasks() ([]*domain.Task, error) {
 	return tasks, nil
 }
 
-func (m *mockAPI) UpdateTask(id int64, name string) error {
+func (m *mockAPI) UpdateTask(ctx context.Context, id int64, name string) error {
 	task, exists := m.tasks[id]
 	if !exists {
 		return fmt.Errorf("task not found: %d", id)
@@ -69,7 +70,7 @@ func (m *mockAPI) UpdateTask(id int64, name string) error {
 	return nil
 }
 
-func (m *mockAPI) DeleteTask(id int64) error {
+func (m *mockAPI) DeleteTask(ctx context.Context, id int64) error {
 	if _, exists := m.tasks[id]; !exists {
 		return fmt.Errorf("task not found: %d", id)
 	}
@@ -77,7 +78,7 @@ func (m *mockAPI) DeleteTask(id int64) error {
 	return nil
 }
 
-func (m *mockAPI) CreateTimeEntry(taskID int64, startTime time.Time, endTime *time.Time) (*domain.TimeEntry, error) {
+func (m *mockAPI) CreateTimeEntry(ctx context.Context, taskID int64, startTime time.Time, endTime *time.Time) (*domain.TimeEntry, error) {
 	entry := &domain.TimeEntry{
 		ID:        m.nextEntryID,
 		TaskID:    taskID,
@@ -89,7 +90,7 @@ func (m *mockAPI) CreateTimeEntry(taskID int64, startTime time.Time, endTime *ti
 	return entry, nil
 }
 
-func (m *mockAPI) GetTimeEntry(id int64) (*domain.TimeEntry, error) {
+func (m *mockAPI) GetTimeEntry(ctx context.Context, id int64) (*domain.TimeEntry, error) {
 	entry, exists := m.timeEntries[id]
 	if !exists {
 		return nil, fmt.Errorf("time entry not found: %d", id)
@@ -97,7 +98,7 @@ func (m *mockAPI) GetTimeEntry(id int64) (*domain.TimeEntry, error) {
 	return entry, nil
 }
 
-func (m *mockAPI) ListTimeEntries() ([]*domain.TimeEntry, error) {
+func (m *mockAPI) ListTimeEntries(ctx context.Context) ([]*domain.TimeEntry, error) {
 	entries := make([]*domain.TimeEntry, 0, len(m.timeEntries))
 	for _, entry := range m.timeEntries {
 		entries = append(entries, entry)
@@ -105,7 +106,7 @@ func (m *mockAPI) ListTimeEntries() ([]*domain.TimeEntry, error) {
 	return entries, nil
 }
 
-func (m *mockAPI) SearchTimeEntries(opts domain.SearchOptions) ([]*domain.TimeEntry, error) {
+func (m *mockAPI) SearchTimeEntries(ctx context.Context, opts domain.SearchOptions) ([]*domain.TimeEntry, error) {
 	var entries []*domain.TimeEntry
 
 	for _, entry := range m.timeEntries {
@@ -143,7 +144,7 @@ func (m *mockAPI) SearchTimeEntries(opts domain.SearchOptions) ([]*domain.TimeEn
 	return entries, nil
 }
 
-func (m *mockAPI) UpdateTimeEntry(id int64, startTime time.Time, endTime *time.Time, taskID int64) error {
+func (m *mockAPI) UpdateTimeEntry(ctx context.Context, id int64, startTime time.Time, endTime *time.Time, taskID int64) error {
 	entry, exists := m.timeEntries[id]
 	if !exists {
 		return fmt.Errorf("time entry not found: %d", id)
@@ -154,7 +155,7 @@ func (m *mockAPI) UpdateTimeEntry(id int64, startTime time.Time, endTime *time.T
 	return nil
 }
 
-func (m *mockAPI) DeleteTimeEntry(id int64) error {
+func (m *mockAPI) DeleteTimeEntry(ctx context.Context, id int64) error {
 	if _, exists := m.timeEntries[id]; !exists {
 		return fmt.Errorf("time entry not found: %d", id)
 	}
@@ -162,7 +163,7 @@ func (m *mockAPI) DeleteTimeEntry(id int64) error {
 	return nil
 }
 
-func (m *mockAPI) StartTask(taskID int64) (*domain.TimeEntry, error) {
+func (m *mockAPI) StartTask(ctx context.Context, taskID int64) (*domain.TimeEntry, error) {
 	// Stop any running tasks
 	now := time.Now()
 	for _, entry := range m.timeEntries {
@@ -172,10 +173,10 @@ func (m *mockAPI) StartTask(taskID int64) (*domain.TimeEntry, error) {
 	}
 
 	// Create new entry
-	return m.CreateTimeEntry(taskID, time.Now(), nil)
+	return m.CreateTimeEntry(ctx, taskID, time.Now(), nil)
 }
 
-func (m *mockAPI) StopTask(entryID int64) error {
+func (m *mockAPI) StopTask(ctx context.Context, entryID int64) error {
 	entry, exists := m.timeEntries[entryID]
 	if !exists {
 		return fmt.Errorf("time entry not found: %d", entryID)
@@ -188,7 +189,7 @@ func (m *mockAPI) StopTask(entryID int64) error {
 	return nil
 }
 
-func (m *mockAPI) ResumeTask(taskID int64) (*domain.TimeEntry, error) {
+func (m *mockAPI) ResumeTask(ctx context.Context, taskID int64) (*domain.TimeEntry, error) {
 	// Stop any running tasks
 	now := time.Now()
 	for _, entry := range m.timeEntries {
@@ -198,10 +199,10 @@ func (m *mockAPI) ResumeTask(taskID int64) (*domain.TimeEntry, error) {
 	}
 
 	// Create new entry
-	return m.CreateTimeEntry(taskID, time.Now(), nil)
+	return m.CreateTimeEntry(ctx, taskID, time.Now(), nil)
 }
 
-func (m *mockAPI) GetCurrentlyRunningTask() (*domain.TimeEntry, error) {
+func (m *mockAPI) GetCurrentlyRunningTask(ctx context.Context) (*domain.TimeEntry, error) {
 	for _, entry := range m.timeEntries {
 		if entry.EndTime == nil {
 			return entry, nil
@@ -210,9 +211,9 @@ func (m *mockAPI) GetCurrentlyRunningTask() (*domain.TimeEntry, error) {
 	return nil, fmt.Errorf("no running task")
 }
 
-func (m *mockAPI) ListTodayTasks() ([]*domain.Task, error) {
+func (m *mockAPI) ListTodayTasks(ctx context.Context) ([]*domain.Task, error) {
 	// For simplicity, return all tasks
-	return m.ListTasks()
+	return m.ListTasks(ctx)
 }
 
 func setupTestAppWithMockAPI(t *testing.T) (*App, func()) {
@@ -314,7 +315,7 @@ func TestApp_Run(t *testing.T) {
 			os.Stdout = w
 
 			// Run app
-			err := app.Run(tt.args)
+			err := app.Run(context.Background(), tt.args)
 
 			// Restore stdout
 			w.Close()
@@ -425,14 +426,14 @@ func TestListTasks(t *testing.T) {
 	timeNow = func() time.Time { return fixedTime }
 
 	// Create some test tasks using the API
-	task1, _ := app.api.CreateTask("First task")
-	task2, _ := app.api.CreateTask("Second task")
-	task3, _ := app.api.CreateTask("Third task")
+	task1, _ := app.api.CreateTask(context.Background(), "First task")
+	task2, _ := app.api.CreateTask(context.Background(), "Second task")
+	task3, _ := app.api.CreateTask(context.Background(), "Third task")
 
 	// Create some test entries using the API
-	app.api.CreateTimeEntry(task1.ID, fixedTime.Add(-2*time.Hour), &fixedTime)
-	app.api.CreateTimeEntry(task2.ID, fixedTime.Add(-1*time.Hour), nil) // Running task
-	app.api.CreateTimeEntry(task3.ID, fixedTime.Add(-30*time.Minute), &fixedTime)
+	app.api.CreateTimeEntry(context.Background(), task1.ID, fixedTime.Add(-2*time.Hour), &fixedTime)
+	app.api.CreateTimeEntry(context.Background(), task2.ID, fixedTime.Add(-1*time.Hour), nil) // Running task
+	app.api.CreateTimeEntry(context.Background(), task3.ID, fixedTime.Add(-30*time.Minute), &fixedTime)
 
 	tests := []struct {
 		name    string
@@ -475,7 +476,7 @@ func TestListTasks(t *testing.T) {
 
 			// Run list command
 			listCmd := NewListCommand(app)
-			err := listCmd.Execute(tt.args)
+			err := listCmd.Execute(context.Background(), tt.args)
 
 			// Restore stdout
 			w.Close()
@@ -528,8 +529,8 @@ func TestShowCurrentTask(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.setupTask {
 				// Create a running task using the API
-				task, _ := app.api.CreateTask("Test task")
-				app.api.CreateTimeEntry(task.ID, time.Now(), nil)
+				task, _ := app.api.CreateTask(context.Background(), "Test task")
+				app.api.CreateTimeEntry(context.Background(), task.ID, time.Now(), nil)
 			}
 
 			// Capture stdout
@@ -539,7 +540,7 @@ func TestShowCurrentTask(t *testing.T) {
 
 			// Run current command
 			currentCmd := NewCurrentCommand(app)
-			err := currentCmd.Execute([]string{})
+			err := currentCmd.Execute(context.Background(), []string{})
 
 			// Restore stdout
 			w.Close()
@@ -569,13 +570,13 @@ func TestOutputCSV(t *testing.T) {
 	defer cleanup()
 
 	// Create test tasks using the API
-	task1, _ := app.api.CreateTask("First task")
-	task2, _ := app.api.CreateTask("Second task")
+	task1, _ := app.api.CreateTask(context.Background(), "First task")
+	task2, _ := app.api.CreateTask(context.Background(), "Second task")
 
 	// Create test entries using the API
 	now := time.Now()
-	app.api.CreateTimeEntry(task1.ID, now.Add(-2*time.Hour), &now)
-	app.api.CreateTimeEntry(task2.ID, now.Add(-1*time.Hour), nil) // Running task
+	app.api.CreateTimeEntry(context.Background(), task1.ID, now.Add(-2*time.Hour), &now)
+	app.api.CreateTimeEntry(context.Background(), task2.ID, now.Add(-1*time.Hour), nil) // Running task
 
 	// Capture stdout
 	oldStdout := os.Stdout
@@ -584,7 +585,7 @@ func TestOutputCSV(t *testing.T) {
 
 	// Run output command
 	outputCmd := NewOutputCommand(app)
-	err := outputCmd.outputCSV()
+	err := outputCmd.outputCSV(context.Background())
 
 	// Restore stdout
 	w.Close()
@@ -643,18 +644,18 @@ func TestDuplicateTaskNames(t *testing.T) {
 	// Create two tasks with the same name
 	taskName := "Duplicate Task"
 	startCmd := NewStartCommand(app)
-	err := startCmd.Execute([]string{taskName})
+	err := startCmd.Execute(context.Background(), []string{taskName})
 	if err != nil {
 		t.Fatalf("Failed to create first task: %v", err)
 	}
 	time.Sleep(10 * time.Millisecond) // Ensure different start times
 	startCmd = NewStartCommand(app)
-	err = startCmd.Execute([]string{taskName})
+	err = startCmd.Execute(context.Background(), []string{taskName})
 	if err != nil {
 		t.Fatalf("Failed to create second task: %v", err)
 	}
 
-	entries, err := app.api.ListTimeEntries()
+	entries, err := app.api.ListTimeEntries(context.Background())
 	if err != nil {
 		t.Fatalf("Failed to list time entries: %v", err)
 	}
@@ -662,11 +663,11 @@ func TestDuplicateTaskNames(t *testing.T) {
 		t.Fatalf("Expected 2 time entries, got %d", len(entries))
 	}
 
-	task1, err := app.api.GetTask(entries[0].TaskID)
+	task1, err := app.api.GetTask(context.Background(), entries[0].TaskID)
 	if err != nil {
 		t.Fatalf("Failed to get task 1: %v", err)
 	}
-	task2, err := app.api.GetTask(entries[1].TaskID)
+	task2, err := app.api.GetTask(context.Background(), entries[1].TaskID)
 	if err != nil {
 		t.Fatalf("Failed to get task 2: %v", err)
 	}
@@ -683,19 +684,19 @@ func TestMultipleRunningTasksAndStop(t *testing.T) {
 	defer cleanup()
 
 	// Create two running tasks using the API
-	task1, _ := app.api.CreateTask("Task 1")
-	task2, _ := app.api.CreateTask("Task 2")
-	app.api.CreateTimeEntry(task1.ID, time.Now().Add(-2*time.Hour), nil)
-	app.api.CreateTimeEntry(task2.ID, time.Now().Add(-1*time.Hour), nil)
+	task1, _ := app.api.CreateTask(context.Background(), "Task 1")
+	task2, _ := app.api.CreateTask(context.Background(), "Task 2")
+	app.api.CreateTimeEntry(context.Background(), task1.ID, time.Now().Add(-2*time.Hour), nil)
+	app.api.CreateTimeEntry(context.Background(), task2.ID, time.Now().Add(-1*time.Hour), nil)
 
 	// Stop all running tasks
 	stopCmd := NewStopCommand(app)
-	err := stopCmd.Execute([]string{})
+	err := stopCmd.Execute(context.Background(), []string{})
 	if err != nil {
 		t.Fatalf("Failed to stop running tasks: %v", err)
 	}
 
-	entries, err := app.api.ListTimeEntries()
+	entries, err := app.api.ListTimeEntries(context.Background())
 	if err != nil {
 		t.Fatalf("Failed to list time entries: %v", err)
 	}
@@ -710,17 +711,17 @@ func TestSearchByPartialTaskName(t *testing.T) {
 	app, cleanup := setupTestAppWithMockAPI(t)
 	defer cleanup()
 
-	task1, _ := app.api.CreateTask("Alpha Project")
-	task2, _ := app.api.CreateTask("Beta Project")
-	task3, _ := app.api.CreateTask("Alpha Test")
-	app.api.CreateTimeEntry(task1.ID, time.Now(), nil)
-	app.api.CreateTimeEntry(task2.ID, time.Now(), nil)
-	app.api.CreateTimeEntry(task3.ID, time.Now(), nil)
+	task1, _ := app.api.CreateTask(context.Background(), "Alpha Project")
+	task2, _ := app.api.CreateTask(context.Background(), "Beta Project")
+	task3, _ := app.api.CreateTask(context.Background(), "Alpha Test")
+	app.api.CreateTimeEntry(context.Background(), task1.ID, time.Now(), nil)
+	app.api.CreateTimeEntry(context.Background(), task2.ID, time.Now(), nil)
+	app.api.CreateTimeEntry(context.Background(), task3.ID, time.Now(), nil)
 
 	// Search for "Alpha"
 	alpha := "Alpha"
 	opts := domain.SearchOptions{TaskName: &alpha}
-	results, err := app.api.SearchTimeEntries(opts)
+	results, err := app.api.SearchTimeEntries(context.Background(), opts)
 	if err != nil {
 		t.Fatalf("Failed to search time entries: %v", err)
 	}
@@ -731,7 +732,7 @@ func TestSearchByPartialTaskName(t *testing.T) {
 	// Search for "Project"
 	project := "Project"
 	opts = domain.SearchOptions{TaskName: &project}
-	results, err = app.api.SearchTimeEntries(opts)
+	results, err = app.api.SearchTimeEntries(context.Background(), opts)
 	if err != nil {
 		t.Fatalf("Failed to search time entries: %v", err)
 	}
@@ -753,7 +754,7 @@ func runResumeWithInput(app *App, args []string, input string) (output string, e
 	inW.Close()
 
 	resumeCmd := NewResumeCommand(app)
-	err = resumeCmd.Execute(args)
+	err = resumeCmd.Execute(context.Background(), args)
 
 	w.Close()
 	os.Stdout = oldStdout
@@ -774,14 +775,14 @@ func TestResumeFeature_Acceptance(t *testing.T) {
 	timeNow = func() time.Time { return fixedTime }
 
 	// Create tasks and entries for today and previous days using the API
-	task1, _ := app.api.CreateTask("Alpha")
-	task2, _ := app.api.CreateTask("Beta")
-	task3, _ := app.api.CreateTask("Gamma")
+	task1, _ := app.api.CreateTask(context.Background(), "Alpha")
+	task2, _ := app.api.CreateTask(context.Background(), "Beta")
+	task3, _ := app.api.CreateTask(context.Background(), "Gamma")
 	// Today
-	app.api.CreateTimeEntry(task1.ID, fixedTime.Add(-2*time.Hour), &fixedTime)
-	app.api.CreateTimeEntry(task2.ID, fixedTime.Add(-1*time.Hour), nil)
+	app.api.CreateTimeEntry(context.Background(), task1.ID, fixedTime.Add(-2*time.Hour), &fixedTime)
+	app.api.CreateTimeEntry(context.Background(), task2.ID, fixedTime.Add(-1*time.Hour), nil)
 	// Previous day
-	app.api.CreateTimeEntry(task3.ID, fixedTime.Add(-26*time.Hour), &fixedTime)
+	app.api.CreateTimeEntry(context.Background(), task3.ID, fixedTime.Add(-26*time.Hour), &fixedTime)
 
 	// 1. Resume with default (today), select task 1 (Beta)
 	output, err := runResumeWithInput(app, []string{}, "1")
@@ -792,7 +793,7 @@ func TestResumeFeature_Acceptance(t *testing.T) {
 		t.Errorf("unexpected output: %s", output)
 	}
 	// Check that a new time entry for Beta was created and any running task is stopped
-	entries, _ := app.api.ListTimeEntries()
+	entries, _ := app.api.ListTimeEntries(context.Background())
 	var found bool
 	for _, e := range entries {
 		if e.TaskID == task2.ID && e.StartTime.Equal(fixedTime) {
@@ -843,13 +844,13 @@ func TestAppWithDependencyInjection(t *testing.T) {
 	// Test that we can use the app with the mock API
 	taskName := "Test Task with DI"
 	startCmd := NewStartCommand(app)
-	err := startCmd.Execute([]string{taskName})
+	err := startCmd.Execute(context.Background(), []string{taskName})
 	if err != nil {
 		t.Fatalf("Expected no error creating task, got: %v", err)
 	}
 
 	// Verify the task was created in the API
-	tasks, err := app.api.ListTasks()
+	tasks, err := app.api.ListTasks(context.Background())
 	if err != nil {
 		t.Fatalf("Expected no error listing tasks, got: %v", err)
 	}
@@ -871,13 +872,13 @@ func TestAppWithMockRepository(t *testing.T) {
 	// Test creating a task
 	taskName := "Test Task"
 	startCmd := NewStartCommand(app)
-	err := startCmd.Execute([]string{taskName})
+	err := startCmd.Execute(context.Background(), []string{taskName})
 	if err != nil {
 		t.Fatalf("Expected no error creating task, got: %v", err)
 	}
 
 	// Verify the task was created in the API
-	tasks, err := app.api.ListTasks()
+	tasks, err := app.api.ListTasks(context.Background())
 	if err != nil {
 		t.Fatalf("Expected no error listing tasks, got: %v", err)
 	}
@@ -897,11 +898,11 @@ func TestAppWithMockRepositoryListTasks(t *testing.T) {
 	defer cleanup()
 
 	// Pre-populate with some test data
-	_, _ = app.api.CreateTask("Test Task")
+	_, _ = app.api.CreateTask(context.Background(), "Test Task")
 
 	// Test listing tasks
 	listCmd := NewListCommand(app)
-	err := listCmd.Execute([]string{})
+	err := listCmd.Execute(context.Background(), []string{})
 	if err != nil {
 		t.Fatalf("Expected no error listing tasks, got: %v", err)
 	}
@@ -916,14 +917,14 @@ func TestAppWithMockRepositoryHelper(t *testing.T) {
 	taskNames := []string{"Task 1", "Task 2", "Task 3"}
 	for _, taskName := range taskNames {
 		startCmd := NewStartCommand(app)
-	err := startCmd.Execute([]string{taskName})
+	err := startCmd.Execute(context.Background(), []string{taskName})
 		if err != nil {
 			t.Fatalf("Expected no error creating task '%s', got: %v", taskName, err)
 		}
 	}
 
 	// Verify all tasks were created in the API
-	tasks, err := app.api.ListTasks()
+	tasks, err := app.api.ListTasks(context.Background())
 	if err != nil {
 		t.Fatalf("Expected no error listing tasks, got: %v", err)
 	}

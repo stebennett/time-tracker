@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"testing"
 	"time"
 	"time-tracker/internal/repository/sqlite"
@@ -21,7 +22,7 @@ func TestAPI_CRUD_Task(t *testing.T) {
 	defer cleanup()
 
 	// Create
-	task, err := api.CreateTask("Test Task")
+	task, err := api.CreateTask(context.Background(), "Test Task")
 	if err != nil {
 		t.Fatalf("CreateTask failed: %v", err)
 	}
@@ -30,7 +31,7 @@ func TestAPI_CRUD_Task(t *testing.T) {
 	}
 
 	// Get
-	got, err := api.GetTask(task.ID)
+	got, err := api.GetTask(context.Background(), task.ID)
 	if err != nil {
 		t.Fatalf("GetTask failed: %v", err)
 	}
@@ -39,7 +40,7 @@ func TestAPI_CRUD_Task(t *testing.T) {
 	}
 
 	// List
-	tasks, err := api.ListTasks()
+	tasks, err := api.ListTasks(context.Background())
 	if err != nil {
 		t.Fatalf("ListTasks failed: %v", err)
 	}
@@ -48,21 +49,21 @@ func TestAPI_CRUD_Task(t *testing.T) {
 	}
 
 	// Update
-	err = api.UpdateTask(task.ID, "Updated Task")
+	err = api.UpdateTask(context.Background(), task.ID, "Updated Task")
 	if err != nil {
 		t.Fatalf("UpdateTask failed: %v", err)
 	}
-	updated, _ := api.GetTask(task.ID)
+	updated, _ := api.GetTask(context.Background(), task.ID)
 	if updated.TaskName != "Updated Task" {
 		t.Errorf("UpdateTask did not update name: %+v", updated)
 	}
 
 	// Delete
-	err = api.DeleteTask(task.ID)
+	err = api.DeleteTask(context.Background(), task.ID)
 	if err != nil {
 		t.Fatalf("DeleteTask failed: %v", err)
 	}
-	_, err = api.GetTask(task.ID)
+	_, err = api.GetTask(context.Background(), task.ID)
 	if err == nil {
 		t.Errorf("expected error after DeleteTask, got nil")
 	}
@@ -72,12 +73,12 @@ func TestAPI_CRUD_TimeEntry(t *testing.T) {
 	api, cleanup := setupTestAPI(t)
 	defer cleanup()
 
-	task, _ := api.CreateTask("Entry Task")
+	task, _ := api.CreateTask(context.Background(), "Entry Task")
 	start := time.Now().Add(-1 * time.Hour)
 	end := time.Now()
 
 	// Create
-	entry, err := api.CreateTimeEntry(task.ID, start, &end)
+	entry, err := api.CreateTimeEntry(context.Background(), task.ID, start, &end)
 	if err != nil {
 		t.Fatalf("CreateTimeEntry failed: %v", err)
 	}
@@ -86,7 +87,7 @@ func TestAPI_CRUD_TimeEntry(t *testing.T) {
 	}
 
 	// Get
-	got, err := api.GetTimeEntry(entry.ID)
+	got, err := api.GetTimeEntry(context.Background(), entry.ID)
 	if err != nil {
 		t.Fatalf("GetTimeEntry failed: %v", err)
 	}
@@ -95,7 +96,7 @@ func TestAPI_CRUD_TimeEntry(t *testing.T) {
 	}
 
 	// List
-	entries, err := api.ListTimeEntries()
+	entries, err := api.ListTimeEntries(context.Background())
 	if err != nil {
 		t.Fatalf("ListTimeEntries failed: %v", err)
 	}
@@ -106,21 +107,21 @@ func TestAPI_CRUD_TimeEntry(t *testing.T) {
 	// Update
 	newStart := start.Add(-30 * time.Minute)
 	newEnd := end.Add(30 * time.Minute)
-	err = api.UpdateTimeEntry(entry.ID, newStart, &newEnd, task.ID)
+	err = api.UpdateTimeEntry(context.Background(), entry.ID, newStart, &newEnd, task.ID)
 	if err != nil {
 		t.Fatalf("UpdateTimeEntry failed: %v", err)
 	}
-	updated, _ := api.GetTimeEntry(entry.ID)
+	updated, _ := api.GetTimeEntry(context.Background(), entry.ID)
 	if updated.StartTime.Unix() != newStart.Unix() || updated.EndTime.Unix() != newEnd.Unix() {
 		t.Errorf("UpdateTimeEntry did not update times: %+v", updated)
 	}
 
 	// Delete
-	err = api.DeleteTimeEntry(entry.ID)
+	err = api.DeleteTimeEntry(context.Background(), entry.ID)
 	if err != nil {
 		t.Fatalf("DeleteTimeEntry failed: %v", err)
 	}
-	_, err = api.GetTimeEntry(entry.ID)
+	_, err = api.GetTimeEntry(context.Background(), entry.ID)
 	if err == nil {
 		t.Errorf("expected error after DeleteTimeEntry, got nil")
 	}
@@ -133,8 +134,8 @@ func TestAPI_BusinessLogic_StartStopCurrent(t *testing.T) {
 	defer cleanup()
 
 	// Start a new task
-	task, _ := api.CreateTask("Work on feature")
-	entry, err := api.StartTask(task.ID)
+	task, _ := api.CreateTask(context.Background(), "Work on feature")
+	entry, err := api.StartTask(context.Background(), task.ID)
 	if err != nil {
 		t.Fatalf("StartTask failed: %v", err)
 	}
@@ -143,7 +144,7 @@ func TestAPI_BusinessLogic_StartStopCurrent(t *testing.T) {
 	}
 
 	// Get currently running task
-	running, err := api.GetCurrentlyRunningTask()
+	running, err := api.GetCurrentlyRunningTask(context.Background())
 	if err != nil {
 		t.Fatalf("GetCurrentlyRunningTask failed: %v", err)
 	}
@@ -152,17 +153,17 @@ func TestAPI_BusinessLogic_StartStopCurrent(t *testing.T) {
 	}
 
 	// Stop the running task
-	err = api.StopTask(running.ID)
+	err = api.StopTask(context.Background(), running.ID)
 	if err != nil {
 		t.Fatalf("StopTask failed: %v", err)
 	}
-	stopped, _ := api.GetTimeEntry(running.ID)
+	stopped, _ := api.GetTimeEntry(context.Background(), running.ID)
 	if stopped.EndTime == nil {
 		t.Errorf("expected EndTime to be set after StopTask")
 	}
 
 	// No running task now
-	_, err = api.GetCurrentlyRunningTask()
+	_, err = api.GetCurrentlyRunningTask(context.Background())
 	if err == nil {
 		t.Errorf("expected error when no running task")
 	}
@@ -172,14 +173,14 @@ func TestAPI_BusinessLogic_ResumeTask(t *testing.T) {
 	api, cleanup := setupTestAPI(t)
 	defer cleanup()
 
-	task, _ := api.CreateTask("Resume Me")
+	task, _ := api.CreateTask(context.Background(), "Resume Me")
 	// Simulate a previous completed entry
 	start := time.Now().Add(-2 * time.Hour)
 	end := time.Now().Add(-1 * time.Hour)
-	api.CreateTimeEntry(task.ID, start, &end)
+	api.CreateTimeEntry(context.Background(), task.ID, start, &end)
 
 	// Resume the task
-	resumed, err := api.ResumeTask(task.ID)
+	resumed, err := api.ResumeTask(context.Background(), task.ID)
 	if err != nil {
 		t.Fatalf("ResumeTask failed: %v", err)
 	}
@@ -193,12 +194,12 @@ func TestAPI_BusinessLogic_ListTodayTasks(t *testing.T) {
 	defer cleanup()
 
 	today := time.Now()
-	task1, _ := api.CreateTask("Today Task 1")
-	task2, _ := api.CreateTask("Today Task 2")
-	api.CreateTimeEntry(task1.ID, today.Add(-2*time.Hour), nil)
-	api.CreateTimeEntry(task2.ID, today.Add(-1*time.Hour), nil)
+	task1, _ := api.CreateTask(context.Background(), "Today Task 1")
+	task2, _ := api.CreateTask(context.Background(), "Today Task 2")
+	api.CreateTimeEntry(context.Background(), task1.ID, today.Add(-2*time.Hour), nil)
+	api.CreateTimeEntry(context.Background(), task2.ID, today.Add(-1*time.Hour), nil)
 
-	tasks, err := api.ListTodayTasks()
+	tasks, err := api.ListTodayTasks(context.Background())
 	if err != nil {
 		t.Fatalf("ListTodayTasks failed: %v", err)
 	}

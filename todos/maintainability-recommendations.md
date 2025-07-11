@@ -134,25 +134,22 @@ type AppError struct {
 - **Result**: 35 new unit tests providing 100% coverage for utilities
 - **Result**: Repository methods now focus on business logic, not boilerplate
 
-### 6. 🔴 **Add Context Support**
-**Status**: PENDING
+### 6. 🟢 **COMPLETED**: Add Context Support
+**Status**: COMPLETED ✅
 **Problem**: No `context.Context` in interface methods, can't cancel operations or handle timeouts
 **Impact**: Poor user experience with long-running operations, no way to cancel operations
-**Files to Modify**:
-- `internal/api/api.go` - Add context parameter to all methods
-- `internal/repository/sqlite/repository.go` - Add context support to database operations
-- All command handlers - Pass context through operation chains
-- Tests - Update to use context in tests
-**Implementation Strategy**:
-- Add context.Context as first parameter to all API methods
-- Use context.WithTimeout for database operations
-- Check context.Done() in long-running operations
-- Add context cancellation support in interactive commands (resume, delete, summary)
-**Acceptance Criteria**:
-- All API methods accept context.Context
-- Database operations respect context cancellation
-- Long-running operations can be cancelled
-- Interactive commands respond to cancellation signals
+**Solution Implemented**:
+- Updated `internal/api/api.go` - Added context parameter to all API methods
+- Updated `internal/repository/sqlite/repository.go` - Added context support to all database operations
+- Updated all command handlers - Pass context through operation chains from main.go to database
+- Updated `cmd/tt/main.go` - Added 60-second timeout for CLI operations
+- Updated `internal/repository/sqlite/common.go` - Added context support to utility functions
+- **Result**: All API methods now accept context.Context as first parameter
+- **Result**: Database operations respect context cancellation with configurable timeouts
+- **Result**: Database queries timeout after 10 seconds, writes timeout after 5 seconds
+- **Result**: Interactive commands (resume, delete, summary) support context cancellation
+- **Result**: Application-level timeout prevents hanging operations
+- **Result**: Foundation established for future tracing and monitoring capabilities
 
 ### 7. 🔴 **Improve Configuration Management**
 **Status**: PENDING

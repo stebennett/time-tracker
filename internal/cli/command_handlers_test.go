@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"strings"
 	"testing"
@@ -16,12 +17,12 @@ func TestCommandHandlerIsolation(t *testing.T) {
 	// Test each command handler individually to ensure they can be extracted
 	t.Run("start command handler", func(t *testing.T) {
 		startCmd := NewStartCommand(app)
-		err := startCmd.Execute([]string{"Test Task"})
+		err := startCmd.Execute(context.Background(), []string{"Test Task"})
 		if err != nil {
 			t.Errorf("startCmd.Execute() error = %v", err)
 		}
 		
-		tasks, err := app.api.ListTasks()
+		tasks, err := app.api.ListTasks(context.Background())
 		if err != nil {
 			t.Errorf("Failed to list tasks: %v", err)
 		}
@@ -32,16 +33,16 @@ func TestCommandHandlerIsolation(t *testing.T) {
 
 	t.Run("stop command handler", func(t *testing.T) {
 		// Create a running task first
-		task, _ := app.api.CreateTask("Running Task")
-		app.api.CreateTimeEntry(task.ID, time.Now(), nil)
+		task, _ := app.api.CreateTask(context.Background(), "Running Task")
+		app.api.CreateTimeEntry(context.Background(), task.ID, time.Now(), nil)
 		
 		stopCmd := NewStopCommand(app)
-		err := stopCmd.Execute([]string{})
+		err := stopCmd.Execute(context.Background(), []string{})
 		if err != nil {
 			t.Errorf("stopCmd.Execute() error = %v", err)
 		}
 		
-		entries, err := app.api.ListTimeEntries()
+		entries, err := app.api.ListTimeEntries(context.Background())
 		if err != nil {
 			t.Errorf("Failed to list entries: %v", err)
 		}
@@ -54,11 +55,11 @@ func TestCommandHandlerIsolation(t *testing.T) {
 
 	t.Run("list command handler", func(t *testing.T) {
 		// Create test data
-		task, _ := app.api.CreateTask("List Test Task")
-		app.api.CreateTimeEntry(task.ID, time.Now(), nil)
+		task, _ := app.api.CreateTask(context.Background(), "List Test Task")
+		app.api.CreateTimeEntry(context.Background(), task.ID, time.Now(), nil)
 		
 		listCmd := NewListCommand(app)
-		err := listCmd.Execute([]string{})
+		err := listCmd.Execute(context.Background(), []string{})
 		if err != nil {
 			t.Errorf("listCmd.Execute() error = %v", err)
 		}
@@ -66,7 +67,7 @@ func TestCommandHandlerIsolation(t *testing.T) {
 
 	t.Run("current command handler", func(t *testing.T) {
 		currentCmd := NewCurrentCommand(app)
-		err := currentCmd.Execute([]string{})
+		err := currentCmd.Execute(context.Background(), []string{})
 		if err != nil {
 			t.Errorf("currentCmd.Execute() error = %v", err)
 		}
@@ -74,7 +75,7 @@ func TestCommandHandlerIsolation(t *testing.T) {
 
 	t.Run("output command handler", func(t *testing.T) {
 		outputCmd := NewOutputCommand(app)
-		err := outputCmd.Execute([]string{"format=csv"})
+		err := outputCmd.Execute(context.Background(), []string{"format=csv"})
 		if err != nil {
 			t.Errorf("outputCmd.Execute() error = %v", err)
 		}
@@ -94,31 +95,31 @@ func TestCommandHandlerInputValidation(t *testing.T) {
 	}{
 		{
 			name: "list with valid time format",
-			commandFunc: func(args []string) error { return NewListCommand(app).Execute(args) },
+			commandFunc: func(args []string) error { return NewListCommand(app).Execute(context.Background(), args) },
 			args:        []string{"1h"},
 			wantErr:     false,
 		},
 		{
 			name: "list with invalid time format",
-			commandFunc: func(args []string) error { return NewListCommand(app).Execute(args) },
+			commandFunc: func(args []string) error { return NewListCommand(app).Execute(context.Background(), args) },
 			args:        []string{"invalid"},
 			wantErr:     false, // Should not error, just treat as text search
 		},
 		{
 			name: "output with valid format",
-			commandFunc: func(args []string) error { return NewOutputCommand(app).Execute(args) },
+			commandFunc: func(args []string) error { return NewOutputCommand(app).Execute(context.Background(), args) },
 			args:        []string{"format=csv"},
 			wantErr:     false,
 		},
 		{
 			name: "output with invalid format",
-			commandFunc: func(args []string) error { return NewOutputCommand(app).Execute(args) },
+			commandFunc: func(args []string) error { return NewOutputCommand(app).Execute(context.Background(), args) },
 			args:        []string{"format=invalid"},
 			wantErr:     true,
 		},
 		{
 			name: "output with no format",
-			commandFunc: func(args []string) error { return NewOutputCommand(app).Execute(args) },
+			commandFunc: func(args []string) error { return NewOutputCommand(app).Execute(context.Background(), args) },
 			args:        []string{},
 			wantErr:     true,
 		},
@@ -160,13 +161,13 @@ func TestCommandHandlerDependencies(t *testing.T) {
 	// Test that a command handler uses the API
 	taskName := "Dependency Test Task"
 	startCmd := NewStartCommand(app)
-	err := startCmd.Execute([]string{taskName})
+	err := startCmd.Execute(context.Background(), []string{taskName})
 	if err != nil {
 		t.Errorf("startCmd.Execute() error = %v", err)
 	}
 
 	// Verify the task was created through the API
-	tasks, err := app.api.ListTasks()
+	tasks, err := app.api.ListTasks(context.Background())
 	if err != nil {
 		t.Errorf("Failed to list tasks: %v", err)
 	}
@@ -181,27 +182,27 @@ func TestCommandHandlerStateManagement(t *testing.T) {
 	defer cleanup()
 
 	// Test that start command stops previous tasks
-	task1, _ := app.api.CreateTask("Task 1")
-	_, _ = app.api.CreateTask("Task 2")
+	task1, _ := app.api.CreateTask(context.Background(), "Task 1")
+	_, _ = app.api.CreateTask(context.Background(), "Task 2")
 	
 	// Start first task
-	app.api.CreateTimeEntry(task1.ID, time.Now(), nil)
+	app.api.CreateTimeEntry(context.Background(), task1.ID, time.Now(), nil)
 	
 	// Start second task (should stop first)
 	startCmd := NewStartCommand(app)
-	err := startCmd.Execute([]string{"Task 3"})
+	err := startCmd.Execute(context.Background(), []string{"Task 3"})
 	if err != nil {
 		t.Errorf("startCmd.Execute() error = %v", err)
 	}
 	
 	// Verify first task is stopped
-	entry1, _ := app.api.GetTimeEntry(1)
+	entry1, _ := app.api.GetTimeEntry(context.Background(), 1)
 	if entry1.EndTime == nil {
 		t.Errorf("Expected first task to be stopped")
 	}
 	
 	// Verify new task is running
-	entries, _ := app.api.ListTimeEntries()
+	entries, _ := app.api.ListTimeEntries(context.Background())
 	var runningCount int
 	for _, entry := range entries {
 		if entry.EndTime == nil {
@@ -223,7 +224,7 @@ func TestCommandHandlerErrorHandling(t *testing.T) {
 		// This test would need a mock that can simulate API errors
 		// For now, we test that errors are properly propagated
 		currentCmd := NewCurrentCommand(app)
-		err := currentCmd.Execute([]string{})
+		err := currentCmd.Execute(context.Background(), []string{})
 		// Should not error when no tasks are running
 		if err != nil {
 			t.Errorf("currentCmd.Execute() should not error when no tasks running, got: %v", err)
@@ -243,8 +244,8 @@ func TestCommandHandlerTimeHandling(t *testing.T) {
 	defer func() { timeNow = oldTimeNow }()
 
 	// Test time parsing in list command
-	task, _ := app.api.CreateTask("Time Test Task")
-	app.api.CreateTimeEntry(task.ID, fixedTime.Add(-2*time.Hour), &fixedTime)
+	task, _ := app.api.CreateTask(context.Background(), "Time Test Task")
+	app.api.CreateTimeEntry(context.Background(), task.ID, fixedTime.Add(-2*time.Hour), &fixedTime)
 	
 	// Test different time formats
 	testCases := []struct {
@@ -267,7 +268,7 @@ func TestCommandHandlerTimeHandling(t *testing.T) {
 			os.Stdout = w
 
 			listCmd := NewListCommand(app)
-			err := listCmd.Execute(tc.args)
+			err := listCmd.Execute(context.Background(), tc.args)
 
 			w.Close()
 			os.Stdout = oldStdout
@@ -295,8 +296,8 @@ func TestCommandHandlerOutputFormatting(t *testing.T) {
 	defer func() { timeNow = oldTimeNow }()
 
 	// Create test data
-	task, _ := app.api.CreateTask("Output Test Task")
-	app.api.CreateTimeEntry(task.ID, fixedTime.Add(-1*time.Hour), &fixedTime)
+	task, _ := app.api.CreateTask(context.Background(), "Output Test Task")
+	app.api.CreateTimeEntry(context.Background(), task.ID, fixedTime.Add(-1*time.Hour), &fixedTime)
 
 	// Test list output formatting
 	t.Run("list output format", func(t *testing.T) {
@@ -305,7 +306,7 @@ func TestCommandHandlerOutputFormatting(t *testing.T) {
 		os.Stdout = w
 
 		listCmd := NewListCommand(app)
-		err := listCmd.Execute([]string{})
+		err := listCmd.Execute(context.Background(), []string{})
 
 		w.Close()
 		os.Stdout = oldStdout
@@ -334,7 +335,7 @@ func TestCommandHandlerOutputFormatting(t *testing.T) {
 		os.Stdout = w
 
 		outputCmd := NewOutputCommand(app)
-		err := outputCmd.outputCSV()
+		err := outputCmd.outputCSV(context.Background())
 
 		w.Close()
 		os.Stdout = oldStdout
@@ -366,7 +367,7 @@ func TestCommandHandlerEdgeCases(t *testing.T) {
 	// Test empty task name
 	t.Run("empty task name", func(t *testing.T) {
 		startCmd := NewStartCommand(app)
-		err := startCmd.Execute([]string{""})
+		err := startCmd.Execute(context.Background(), []string{""})
 		if err != nil {
 			t.Errorf("startCmd.Execute('') should not error, got: %v", err)
 		}
@@ -376,7 +377,7 @@ func TestCommandHandlerEdgeCases(t *testing.T) {
 	t.Run("long task name", func(t *testing.T) {
 		longName := strings.Repeat("A", 1000)
 		startCmd := NewStartCommand(app)
-		err := startCmd.Execute([]string{longName})
+		err := startCmd.Execute(context.Background(), []string{longName})
 		if err != nil {
 			t.Errorf("startCmd.Execute with long name should not error, got: %v", err)
 		}
@@ -386,7 +387,7 @@ func TestCommandHandlerEdgeCases(t *testing.T) {
 	t.Run("special characters", func(t *testing.T) {
 		specialName := "Task with !@#$%^&*()_+-=[]{}|;':\",./<>?"
 		startCmd := NewStartCommand(app)
-		err := startCmd.Execute([]string{specialName})
+		err := startCmd.Execute(context.Background(), []string{specialName})
 		if err != nil {
 			t.Errorf("startCmd.Execute with special chars should not error, got: %v", err)
 		}
@@ -395,7 +396,7 @@ func TestCommandHandlerEdgeCases(t *testing.T) {
 	// Test stop when no tasks are running
 	t.Run("stop no running tasks", func(t *testing.T) {
 		stopCmd := NewStopCommand(app)
-		err := stopCmd.Execute([]string{})
+		err := stopCmd.Execute(context.Background(), []string{})
 		if err != nil {
 			t.Errorf("stopCmd.Execute() with no running tasks should not error, got: %v", err)
 		}
@@ -408,7 +409,7 @@ func TestCommandHandlerEdgeCases(t *testing.T) {
 		os.Stdout = w
 
 		currentCmd := NewCurrentCommand(app)
-		err := currentCmd.Execute([]string{})
+		err := currentCmd.Execute(context.Background(), []string{})
 
 		w.Close()
 		os.Stdout = oldStdout
