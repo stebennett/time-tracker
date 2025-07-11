@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
@@ -20,21 +21,21 @@ func NewListCommand(app *App) *ListCommand {
 }
 
 // Execute runs the list command
-func (c *ListCommand) Execute(args []string) error {
-	return c.listTasks(args)
+func (c *ListCommand) Execute(ctx context.Context, args []string) error {
+	return c.listTasks(ctx, args)
 }
 
 // listTasks handles the list command with various options
-func (c *ListCommand) listTasks(args []string) error {
+func (c *ListCommand) listTasks(ctx context.Context, args []string) error {
 	opts := domain.SearchOptions{}
 
 	// If no arguments, list all tasks
 	if len(args) == 0 {
-		entries, err := c.api.ListTimeEntries()
+		entries, err := c.api.ListTimeEntries(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to list tasks: %w", err)
 		}
-		return c.printEntries(entries)
+		return c.printEntries(ctx, entries)
 	}
 
 	// Check if first argument is a time shorthand
@@ -57,18 +58,18 @@ func (c *ListCommand) listTasks(args []string) error {
 	}
 
 	// Search for entries
-	entries, err := c.api.SearchTimeEntries(opts)
+	entries, err := c.api.SearchTimeEntries(ctx, opts)
 	if err != nil {
 		return fmt.Errorf("failed to search tasks: %w", err)
 	}
 
-	return c.printEntries(entries)
+	return c.printEntries(ctx, entries)
 }
 
 // printEntries prints one line per task in the format:
 // startTime - endTime (duration): taskName
 // Where startTime and endTime are from the last time entry for the task, and endTime is 'running' if the entry is running.
-func (c *ListCommand) printEntries(entries []*domain.TimeEntry) error {
+func (c *ListCommand) printEntries(ctx context.Context, entries []*domain.TimeEntry) error {
 	if len(entries) == 0 {
 		fmt.Println("No tasks found")
 		return nil
@@ -83,7 +84,7 @@ func (c *ListCommand) printEntries(entries []*domain.TimeEntry) error {
 	}
 	lastEntryMap := make(map[int64]*lastEntryInfo)
 	for _, entry := range entries {
-		task, err := c.api.GetTask(entry.TaskID)
+		task, err := c.api.GetTask(ctx, entry.TaskID)
 		if err != nil {
 			return fmt.Errorf("failed to get task for entry %d: %w", entry.ID, err)
 		}

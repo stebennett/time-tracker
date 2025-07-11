@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"sort"
@@ -22,12 +23,12 @@ func NewResumeCommand(app *App) *ResumeCommand {
 }
 
 // Execute runs the resume command
-func (c *ResumeCommand) Execute(args []string) error {
-	return c.resumeTask(args)
+func (c *ResumeCommand) Execute(ctx context.Context, args []string) error {
+	return c.resumeTask(ctx, args)
 }
 
 // resumeTask implements the resume scenario
-func (c *ResumeCommand) resumeTask(args []string) error {
+func (c *ResumeCommand) resumeTask(ctx context.Context, args []string) error {
 	// Determine time range (default: today)
 	var startTime time.Time
 	now := timeNow()
@@ -44,7 +45,7 @@ func (c *ResumeCommand) resumeTask(args []string) error {
 
 	// Find all time entries in the period, most recent first
 	opts := domain.SearchOptions{StartTime: &startTime, EndTime: &now}
-	entries, err := c.api.SearchTimeEntries(opts)
+	entries, err := c.api.SearchTimeEntries(ctx, opts)
 	if err != nil {
 		return fmt.Errorf("failed to search time entries: %w", err)
 	}
@@ -74,7 +75,7 @@ func (c *ResumeCommand) resumeTask(args []string) error {
 
 	fmt.Println("Select a task to resume:")
 	for i, id := range taskIDs {
-		task, _ := c.api.GetTask(id)
+		task, _ := c.api.GetTask(ctx, id)
 		last := taskMap[id].StartTime.Format("2006-01-02 15:04:05")
 		fmt.Printf("%d. %s (last worked: %s)\n", i+1, task.TaskName, last)
 	}
@@ -94,25 +95,25 @@ func (c *ResumeCommand) resumeTask(args []string) error {
 	selectedTaskID := taskIDs[idx-1]
 
 	// Stop any running tasks
-	if err := c.stopRunningTasks(); err != nil {
+	if err := c.stopRunningTasks(ctx); err != nil {
 		return err
 	}
 
 	// Create a new time entry for the selected task
-	_, err = c.api.CreateTimeEntry(selectedTaskID, timeNow(), nil)
+	_, err = c.api.CreateTimeEntry(ctx, selectedTaskID, timeNow(), nil)
 	if err != nil {
 		return fmt.Errorf("failed to resume task: %w", err)
 	}
-	task, _ := c.api.GetTask(selectedTaskID)
+	task, _ := c.api.GetTask(ctx, selectedTaskID)
 	fmt.Printf("Resumed task: %s\n", task.TaskName)
 	return nil
 }
 
 // stopRunningTasks marks all running tasks as complete
-func (c *ResumeCommand) stopRunningTasks() error {
+func (c *ResumeCommand) stopRunningTasks(ctx context.Context) error {
 	// Search for tasks with no end time
 	opts := domain.SearchOptions{}
-	entries, err := c.api.SearchTimeEntries(opts)
+	entries, err := c.api.SearchTimeEntries(ctx, opts)
 	if err != nil {
 		return fmt.Errorf("failed to search for running tasks: %w", err)
 	}
@@ -121,7 +122,7 @@ func (c *ResumeCommand) stopRunningTasks() error {
 	for _, entry := range entries {
 		if entry.EndTime == nil {
 			entry.EndTime = &now
-			if err := c.api.UpdateTimeEntry(entry.ID, entry.StartTime, entry.EndTime, entry.TaskID); err != nil {
+			if err := c.api.UpdateTimeEntry(ctx, entry.ID, entry.StartTime, entry.EndTime, entry.TaskID); err != nil {
 				return fmt.Errorf("failed to update task %d: %w", entry.ID, err)
 			}
 		}

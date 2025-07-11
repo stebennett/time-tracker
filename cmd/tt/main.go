@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"time"
 
 	"time-tracker/internal/api"
 	"time-tracker/internal/cli"
@@ -28,7 +30,12 @@ func main() {
 	// Create app with injected API
 	app := cli.NewApp(apiInstance)
 
-	if err := app.Run(os.Args[1:]); err != nil {
+	// Create context with timeout for the application
+	// Interactive commands (resume, delete, summary) may need longer timeouts
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	
+	if err := app.Run(ctx, os.Args[1:]); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}

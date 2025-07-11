@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"sort"
@@ -24,12 +25,12 @@ func NewDeleteCommand(app *App) *DeleteCommand {
 }
 
 // Execute runs the delete command
-func (c *DeleteCommand) Execute(args []string) error {
-	return c.deleteTask(args)
+func (c *DeleteCommand) Execute(ctx context.Context, args []string) error {
+	return c.deleteTask(ctx, args)
 }
 
 // deleteTask implements the delete command
-func (c *DeleteCommand) deleteTask(args []string) error {
+func (c *DeleteCommand) deleteTask(ctx context.Context, args []string) error {
 	// Determine time range (default: last 24h or user-supplied duration)
 	now := timeNow()
 	var startTime time.Time
@@ -56,7 +57,7 @@ func (c *DeleteCommand) deleteTask(args []string) error {
 		opts.TaskName = &filterText
 	}
 
-	entries, err := c.api.SearchTimeEntries(opts)
+	entries, err := c.api.SearchTimeEntries(ctx, opts)
 	if err != nil {
 		return fmt.Errorf("failed to search time entries: %w", err)
 	}
@@ -89,7 +90,7 @@ func (c *DeleteCommand) deleteTask(args []string) error {
 
 	fmt.Println("Select a task to delete:")
 	for i, id := range taskIDs {
-		task, _ := c.api.GetTask(id)
+		task, _ := c.api.GetTask(ctx, id)
 		last := taskMap[id].StartTime.Format("2006-01-02 15:04:05")
 		fmt.Printf("%d. %s (last worked: %s)\n", i+1, task.TaskName, last)
 	}
@@ -107,23 +108,23 @@ func (c *DeleteCommand) deleteTask(args []string) error {
 		return errors.NewInvalidInputError("selection", input, "invalid selection")
 	}
 	selectedTaskID := taskIDs[idx-1]
-	task, _ := c.api.GetTask(selectedTaskID)
+	task, _ := c.api.GetTask(ctx, selectedTaskID)
 
 	// Delete all time entries for the selected task only
 	entryOpts := domain.SearchOptions{TaskID: &selectedTaskID}
-	taskEntries, err := c.api.SearchTimeEntries(entryOpts)
+	taskEntries, err := c.api.SearchTimeEntries(ctx, entryOpts)
 	if err != nil {
 		return fmt.Errorf("failed to get time entries for task: %w", err)
 	}
 	for _, entry := range taskEntries {
-		err := c.api.DeleteTimeEntry(entry.ID)
+		err := c.api.DeleteTimeEntry(ctx, entry.ID)
 		if err != nil {
 			return fmt.Errorf("failed to delete time entry %d: %w", entry.ID, err)
 		}
 	}
 
 	// Delete the task itself
-	if err := c.api.DeleteTask(selectedTaskID); err != nil {
+	if err := c.api.DeleteTask(ctx, selectedTaskID); err != nil {
 		return fmt.Errorf("failed to delete task: %w", err)
 	}
 

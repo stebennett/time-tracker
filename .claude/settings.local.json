@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(go test:*)",
+      "Bash(grep:*)",
+      "Bash(go build:*)",
+      "Bash(find:*)",
+      "Bash(./scripts/e2e-test.sh:*)",
+      "Bash(TT_DB=/tmp/tt_test.db ./tt-e2e-test:*)",
+      "Bash(TT_DB:*)"
+    ],
+    "deny": []
+  }
+}

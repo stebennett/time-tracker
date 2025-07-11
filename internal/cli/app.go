@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -80,7 +81,7 @@ func NewAppWithDefaultRepository() (*App, error) {
 }
 
 // Run executes the CLI application with the given arguments
-func (a *App) Run(args []string) error {
+func (a *App) Run(ctx context.Context, args []string) error {
 	if len(args) == 0 {
 		return errors.NewInvalidInputError("command", "", a.registry.GetUsage())
 	}
@@ -88,7 +89,7 @@ func (a *App) Run(args []string) error {
 	commandName := args[0]
 	commandArgs := args[1:]
 
-	return a.registry.Execute(commandName, commandArgs)
+	return a.registry.Execute(ctx, commandName, commandArgs)
 }
 
 // parseTimeShorthand parses time shorthand like "30m", "2h", "1d", etc.

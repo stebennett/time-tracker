@@ -1,6 +1,7 @@
 package sqlite
 
 import (
+	"context"
 	"database/sql"
 
 	"time-tracker/internal/errors"
@@ -32,8 +33,8 @@ func ValidateRowsAffected(result sql.Result, entityType string, id string) error
 }
 
 // ExecuteWithLastInsertID executes a query and returns the last insert ID
-func ExecuteWithLastInsertID(db *sql.DB, query string, args ...interface{}) (int64, error) {
-	result, err := db.Exec(query, args...)
+func ExecuteWithLastInsertID(ctx context.Context, db *sql.DB, query string, args ...interface{}) (int64, error) {
+	result, err := db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return 0, HandleDatabaseError("execute query", err)
 	}
@@ -47,8 +48,8 @@ func ExecuteWithLastInsertID(db *sql.DB, query string, args ...interface{}) (int
 }
 
 // ExecuteWithRowsAffected executes a query and validates that rows were affected
-func ExecuteWithRowsAffected(db *sql.DB, query string, entityType string, id string, args ...interface{}) error {
-	result, err := db.Exec(query, args...)
+func ExecuteWithRowsAffected(ctx context.Context, db *sql.DB, query string, entityType string, id string, args ...interface{}) error {
+	result, err := db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return HandleDatabaseError("execute query", err)
 	}
@@ -57,8 +58,8 @@ func ExecuteWithRowsAffected(db *sql.DB, query string, entityType string, id str
 }
 
 // QuerySingle executes a query that returns a single row and scans it
-func QuerySingle[T any](db *sql.DB, query string, scanFunc func(Scanner) (*T, error), entityType string, id string, args ...interface{}) (*T, error) {
-	row := db.QueryRow(query, args...)
+func QuerySingle[T any](ctx context.Context, db *sql.DB, query string, scanFunc func(Scanner) (*T, error), entityType string, id string, args ...interface{}) (*T, error) {
+	row := db.QueryRowContext(ctx, query, args...)
 	result, err := scanFunc(row)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -70,8 +71,8 @@ func QuerySingle[T any](db *sql.DB, query string, scanFunc func(Scanner) (*T, er
 }
 
 // QueryMultiple executes a query that returns multiple rows and scans them
-func QueryMultiple[T any](db *sql.DB, query string, scanFunc func(Rows) ([]*T, error), entityType string, args ...interface{}) ([]*T, error) {
-	rows, err := db.Query(query, args...)
+func QueryMultiple[T any](ctx context.Context, db *sql.DB, query string, scanFunc func(Rows) ([]*T, error), entityType string, args ...interface{}) ([]*T, error) {
+	rows, err := db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, HandleDatabaseError("query "+entityType, err)
 	}

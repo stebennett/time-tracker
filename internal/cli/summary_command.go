@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"sort"
@@ -24,12 +25,12 @@ func NewSummaryCommand(app *App) *SummaryCommand {
 }
 
 // Execute runs the summary command
-func (c *SummaryCommand) Execute(args []string) error {
-	return c.summaryTask(args)
+func (c *SummaryCommand) Execute(ctx context.Context, args []string) error {
+	return c.summaryTask(ctx, args)
 }
 
 // summaryTask implements the summary command
-func (c *SummaryCommand) summaryTask(args []string) error {
+func (c *SummaryCommand) summaryTask(ctx context.Context, args []string) error {
 	// Determine time range and search text
 	var startTime *time.Time
 	var searchText string
@@ -65,7 +66,7 @@ func (c *SummaryCommand) summaryTask(args []string) error {
 			timeFilterOpts.TaskName = &searchText
 		}
 
-		timeFilterEntries, err := c.api.SearchTimeEntries(timeFilterOpts)
+		timeFilterEntries, err := c.api.SearchTimeEntries(ctx, timeFilterOpts)
 		if err != nil {
 			return fmt.Errorf("failed to search time entries: %w", err)
 		}
@@ -86,7 +87,7 @@ func (c *SummaryCommand) summaryTask(args []string) error {
 			TaskName: &searchText,
 		}
 
-		textFilterEntries, err := c.api.SearchTimeEntries(textFilterOpts)
+		textFilterEntries, err := c.api.SearchTimeEntries(ctx, textFilterOpts)
 		if err != nil {
 			return fmt.Errorf("failed to search time entries: %w", err)
 		}
@@ -103,7 +104,7 @@ func (c *SummaryCommand) summaryTask(args []string) error {
 		}
 	} else {
 		// No filters, get all tasks
-		allEntries, err := c.api.ListTimeEntries()
+		allEntries, err := c.api.ListTimeEntries(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to list time entries: %w", err)
 		}
@@ -127,20 +128,20 @@ func (c *SummaryCommand) summaryTask(args []string) error {
 
 	// Sort task IDs by task name for consistent ordering
 	sort.Slice(matchingTaskIDs, func(i, j int) bool {
-		taskI, _ := c.api.GetTask(matchingTaskIDs[i])
-		taskJ, _ := c.api.GetTask(matchingTaskIDs[j])
+		taskI, _ := c.api.GetTask(ctx, matchingTaskIDs[i])
+		taskJ, _ := c.api.GetTask(ctx, matchingTaskIDs[j])
 		return taskI.TaskName < taskJ.TaskName
 	})
 
 	// If only one task, show its summary directly
 	if len(matchingTaskIDs) == 1 {
-		return c.showTaskSummary(matchingTaskIDs[0])
+		return c.showTaskSummary(ctx, matchingTaskIDs[0])
 	}
 
 	// Multiple tasks found, let user choose
 	fmt.Println("Select a task to summarize:")
 	for i, taskID := range matchingTaskIDs {
-		task, _ := c.api.GetTask(taskID)
+		task, _ := c.api.GetTask(ctx, taskID)
 		fmt.Printf("%d. %s\n", i+1, task.TaskName)
 	}
 	fmt.Print("Enter number to summarize, or 'q' to quit: ")
@@ -158,20 +159,20 @@ func (c *SummaryCommand) summaryTask(args []string) error {
 	}
 	selectedTaskID := matchingTaskIDs[idx-1]
 
-	return c.showTaskSummary(selectedTaskID)
+	return c.showTaskSummary(ctx, selectedTaskID)
 }
 
 // showTaskSummary displays a detailed summary for a specific task
-func (c *SummaryCommand) showTaskSummary(taskID int64) error {
+func (c *SummaryCommand) showTaskSummary(ctx context.Context, taskID int64) error {
 	// Get task details
-	task, err := c.api.GetTask(taskID)
+	task, err := c.api.GetTask(ctx, taskID)
 	if err != nil {
 		return fmt.Errorf("failed to get task: %w", err)
 	}
 
 	// Get all time entries for this task
 	opts := domain.SearchOptions{}
-	entries, err := c.api.SearchTimeEntries(opts)
+	entries, err := c.api.SearchTimeEntries(ctx, opts)
 	if err != nil {
 		return fmt.Errorf("failed to get time entries: %w", err)
 	}

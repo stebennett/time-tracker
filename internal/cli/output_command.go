@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/csv"
 	"fmt"
 	"os"
@@ -22,12 +23,12 @@ func NewOutputCommand(app *App) *OutputCommand {
 }
 
 // Execute runs the output command
-func (c *OutputCommand) Execute(args []string) error {
-	return c.outputTasks(args)
+func (c *OutputCommand) Execute(ctx context.Context, args []string) error {
+	return c.outputTasks(ctx, args)
 }
 
 // outputTasks outputs tasks in the specified format
-func (c *OutputCommand) outputTasks(args []string) error {
+func (c *OutputCommand) outputTasks(ctx context.Context, args []string) error {
 	if len(args) == 0 {
 		return errors.NewInvalidInputError("command", "output", "usage: tt output format=csv")
 	}
@@ -41,16 +42,16 @@ func (c *OutputCommand) outputTasks(args []string) error {
 	format = strings.TrimPrefix(format, "format=")
 	switch format {
 	case "csv":
-		return c.outputCSV()
+		return c.outputCSV(ctx)
 	default:
 		return errors.NewInvalidInputError("format", format, "unsupported format")
 	}
 }
 
 // outputCSV outputs all tasks in CSV format
-func (c *OutputCommand) outputCSV() error {
+func (c *OutputCommand) outputCSV(ctx context.Context) error {
 	// Get all tasks
-	entries, err := c.api.ListTimeEntries()
+	entries, err := c.api.ListTimeEntries(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to list tasks: %w", err)
 	}
@@ -78,7 +79,7 @@ func (c *OutputCommand) outputCSV() error {
 			duration = entry.EndTime.Sub(entry.StartTime).Hours()
 		}
 
-		task, err := c.api.GetTask(entry.TaskID)
+		task, err := c.api.GetTask(ctx, entry.TaskID)
 		if err != nil {
 			return fmt.Errorf("failed to get task for entry %d: %w", entry.ID, err)
 		}

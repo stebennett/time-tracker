@@ -1,6 +1,7 @@
 package sqlite
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"strings"
@@ -10,6 +11,14 @@ import (
 	"time-tracker/internal/repository/sqlite/migrations"
 
 	_ "modernc.org/sqlite"
+)
+
+// Database operation timeout constants
+const (
+	// DatabaseQueryTimeout is the maximum time allowed for database queries
+	DatabaseQueryTimeout = 10 * time.Second
+	// DatabaseWriteTimeout is the maximum time allowed for database writes
+	DatabaseWriteTimeout = 5 * time.Second
 )
 
 
@@ -24,23 +33,23 @@ type SearchOptions struct {
 // Repository defines the interface for database operations
 type Repository interface {
 	// Create operations
-	CreateTimeEntry(entry *TimeEntry) error
-	CreateTask(task *Task) error
+	CreateTimeEntry(ctx context.Context, entry *TimeEntry) error
+	CreateTask(ctx context.Context, task *Task) error
 
 	// Read operations
-	GetTimeEntry(id int64) (*TimeEntry, error)
-	ListTimeEntries() ([]*TimeEntry, error)
-	SearchTimeEntries(opts SearchOptions) ([]*TimeEntry, error)
-	GetTask(id int64) (*Task, error)
-	ListTasks() ([]*Task, error)
+	GetTimeEntry(ctx context.Context, id int64) (*TimeEntry, error)
+	ListTimeEntries(ctx context.Context) ([]*TimeEntry, error)
+	SearchTimeEntries(ctx context.Context, opts SearchOptions) ([]*TimeEntry, error)
+	GetTask(ctx context.Context, id int64) (*Task, error)
+	ListTasks(ctx context.Context) ([]*Task, error)
 
 	// Update operations
-	UpdateTimeEntry(entry *TimeEntry) error
-	UpdateTask(task *Task) error
+	UpdateTimeEntry(ctx context.Context, entry *TimeEntry) error
+	UpdateTask(ctx context.Context, task *Task) error
 
 	// Delete operations
-	DeleteTimeEntry(id int64) error
-	DeleteTask(id int64) error
+	DeleteTimeEntry(ctx context.Context, id int64) error
+	DeleteTask(ctx context.Context, id int64) error
 
 	// Utility
 	Close() error
@@ -49,6 +58,11 @@ type Repository interface {
 // SQLiteRepository implements the Repository interface
 type SQLiteRepository struct {
 	db *sql.DB
+}
+
+// withTimeout creates a context with timeout for database operations
+func (r *SQLiteRepository) withTimeout(ctx context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(ctx, timeout)
 }
 
 // New creates a new SQLite repository instance
@@ -73,12 +87,16 @@ func (r *SQLiteRepository) Close() error {
 }
 
 // CreateTimeEntry creates a new time entry
-func (r *SQLiteRepository) CreateTimeEntry(entry *TimeEntry) error {
+func (r *SQLiteRepository) CreateTimeEntry(ctx context.Context, entry *TimeEntry) error {
+	// Add timeout for write operations
+	timeoutCtx, cancel := r.withTimeout(ctx, DatabaseWriteTimeout)
+	defer cancel()
+	
 	query := `
 	INSERT INTO time_entries (start_time, end_time, task_id)
 	VALUES (?, ?, ?)`
 
-	id, err := ExecuteWithLastInsertID(r.db, query, FormatTimeForDB(entry.StartTime), FormatTimePtrForDB(entry.EndTime), entry.TaskID)
+	id, err := ExecuteWithLastInsertID(timeoutCtx, r.db, query, FormatTimeForDB(entry.StartTime), FormatTimePtrForDB(entry.EndTime), entry.TaskID)
 	if err != nil {
 		return err
 	}
@@ -88,45 +106,49 @@ func (r *SQLiteRepository) CreateTimeEntry(entry *TimeEntry) error {
 }
 
 // GetTimeEntry retrieves a time entry by ID
-func (r *SQLiteRepository) GetTimeEntry(id int64) (*TimeEntry, error) {
+func (r *SQLiteRepository) GetTimeEntry(ctx context.Context, id int64) (*TimeEntry, error) {
+	// Add timeout for read operations
+	timeoutCtx, cancel := r.withTimeout(ctx, DatabaseQueryTimeout)
+	defer cancel()
+	
 	query := `
 	SELECT id, start_time, end_time, task_id
 	FROM time_entries
 	WHERE id = ?`
 
-	return QuerySingle(r.db, query, ScanTimeEntry, "time entry", fmt.Sprintf("%d", id), id)
+	return QuerySingle(timeoutCtx, r.db, query, ScanTimeEntry, "time entry", fmt.Sprintf("%d", id), id)
 }
 
 // ListTimeEntries retrieves all time entries
-func (r *SQLiteRepository) ListTimeEntries() ([]*TimeEntry, error) {
+func (r *SQLiteRepository) ListTimeEntries(ctx context.Context) ([]*TimeEntry, error) {
 	query := `
 	SELECT id, start_time, end_time, task_id
 	FROM time_entries
 	ORDER BY start_time ASC`
 
-	return QueryMultiple(r.db, query, ScanTimeEntries, "time entries")
+	return QueryMultiple(ctx, r.db, query, ScanTimeEntries, "time entries")
 }
 
 // UpdateTimeEntry updates an existing time entry
-func (r *SQLiteRepository) UpdateTimeEntry(entry *TimeEntry) error {
+func (r *SQLiteRepository) UpdateTimeEntry(ctx context.Context, entry *TimeEntry) error {
 	query := `
 	UPDATE time_entries
 	SET start_time = ?, end_time = ?, task_id = ?
 	WHERE id = ?`
 
-	return ExecuteWithRowsAffected(r.db, query, "time entry", fmt.Sprintf("%d", entry.ID), FormatTimeForDB(entry.StartTime), FormatTimePtrForDB(entry.EndTime), entry.TaskID, entry.ID)
+	return ExecuteWithRowsAffected(ctx, r.db, query, "time entry", fmt.Sprintf("%d", entry.ID), FormatTimeForDB(entry.StartTime), FormatTimePtrForDB(entry.EndTime), entry.TaskID, entry.ID)
 }
 
 // DeleteTimeEntry deletes a time entry by ID
-func (r *SQLiteRepository) DeleteTimeEntry(id int64) error {
+func (r *SQLiteRepository) DeleteTimeEntry(ctx context.Context, id int64) error {
 	query := `DELETE FROM time_entries WHERE id = ?`
-	return ExecuteWithRowsAffected(r.db, query, "time entry", fmt.Sprintf("%d", id), id)
+	return ExecuteWithRowsAffected(ctx, r.db, query, "time entry", fmt.Sprintf("%d", id), id)
 }
 
 // CreateTask creates a new task
-func (r *SQLiteRepository) CreateTask(task *Task) error {
+func (r *SQLiteRepository) CreateTask(ctx context.Context, task *Task) error {
 	query := `INSERT INTO tasks (task_name) VALUES (?)`
-	id, err := ExecuteWithLastInsertID(r.db, query, task.TaskName)
+	id, err := ExecuteWithLastInsertID(ctx, r.db, query, task.TaskName)
 	if err != nil {
 		return err
 	}
@@ -135,31 +157,34 @@ func (r *SQLiteRepository) CreateTask(task *Task) error {
 }
 
 // GetTask retrieves a task by ID
-func (r *SQLiteRepository) GetTask(id int64) (*Task, error) {
+func (r *SQLiteRepository) GetTask(ctx context.Context, id int64) (*Task, error) {
 	query := `SELECT id, task_name FROM tasks WHERE id = ?`
-	return QuerySingle(r.db, query, ScanTask, "task", fmt.Sprintf("%d", id), id)
+	return QuerySingle(ctx, r.db, query, ScanTask, "task", fmt.Sprintf("%d", id), id)
 }
 
 // ListTasks retrieves all tasks
-func (r *SQLiteRepository) ListTasks() ([]*Task, error) {
+func (r *SQLiteRepository) ListTasks(ctx context.Context) ([]*Task, error) {
 	query := `SELECT id, task_name FROM tasks ORDER BY task_name ASC`
-	return QueryMultiple(r.db, query, ScanTasks, "tasks")
+	return QueryMultiple(ctx, r.db, query, ScanTasks, "tasks")
 }
 
 // UpdateTask updates an existing task
-func (r *SQLiteRepository) UpdateTask(task *Task) error {
+func (r *SQLiteRepository) UpdateTask(ctx context.Context, task *Task) error {
 	query := `UPDATE tasks SET task_name = ? WHERE id = ?`
-	return ExecuteWithRowsAffected(r.db, query, "task", fmt.Sprintf("%d", task.ID), task.TaskName, task.ID)
+	return ExecuteWithRowsAffected(ctx, r.db, query, "task", fmt.Sprintf("%d", task.ID), task.TaskName, task.ID)
 }
 
 // DeleteTask deletes a task by ID
-func (r *SQLiteRepository) DeleteTask(id int64) error {
+func (r *SQLiteRepository) DeleteTask(ctx context.Context, id int64) error {
 	query := `DELETE FROM tasks WHERE id = ?`
-	return ExecuteWithRowsAffected(r.db, query, "task", fmt.Sprintf("%d", id), id)
+	return ExecuteWithRowsAffected(ctx, r.db, query, "task", fmt.Sprintf("%d", id), id)
 }
 
 // SearchTimeEntries searches for time entries based on the provided options
-func (r *SQLiteRepository) SearchTimeEntries(opts SearchOptions) ([]*TimeEntry, error) {
+func (r *SQLiteRepository) SearchTimeEntries(ctx context.Context, opts SearchOptions) ([]*TimeEntry, error) {
+	// Add timeout for potentially long-running search operations
+	timeoutCtx, cancel := r.withTimeout(ctx, DatabaseQueryTimeout)
+	defer cancel()
 	var conditions []string
 	var args []interface{}
 
@@ -211,5 +236,5 @@ func (r *SQLiteRepository) SearchTimeEntries(opts SearchOptions) ([]*TimeEntry, 
 	query += " ORDER BY start_time ASC"
 
 	// Execute the query
-	return QueryMultiple(r.db, query, ScanTimeEntries, "time entries", args...)
+	return QueryMultiple(timeoutCtx, r.db, query, ScanTimeEntries, "time entries", args...)
 }

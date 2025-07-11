@@ -1,12 +1,13 @@
 package cli
 
 import (
+	"context"
 	"time-tracker/internal/errors"
 )
 
 // Command represents a CLI command
 type Command interface {
-	Execute(args []string) error
+	Execute(ctx context.Context, args []string) error
 }
 
 // CommandRegistry manages all available commands
@@ -39,12 +40,12 @@ func (r *CommandRegistry) Register(name string, command Command) {
 }
 
 // Execute runs the specified command with the given arguments
-func (r *CommandRegistry) Execute(commandName string, args []string) error {
+func (r *CommandRegistry) Execute(ctx context.Context, commandName string, args []string) error {
 	command, exists := r.commands[commandName]
 	if !exists {
 		return errors.NewInvalidInputError("command", commandName, "unknown command")
 	}
-	return command.Execute(args)
+	return command.Execute(ctx, args)
 }
 
 // GetUsage returns the usage string for the CLI
