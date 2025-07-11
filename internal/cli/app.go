@@ -19,6 +19,7 @@ var timeNow = time.Now
 // App represents the main CLI application
 type App struct {
 	api      api.API
+	config   *config.Config
 	registry *CommandRegistry
 }
 
@@ -26,7 +27,18 @@ type App struct {
 // NewApp creates a new CLI application instance with dependency injection
 func NewApp(api api.API) *App {
 	app := &App{
-		api: api,
+		api:    api,
+		config: nil, // Will be set by caller
+	}
+	app.registry = NewCommandRegistry(app)
+	return app
+}
+
+// NewAppWithConfig creates a new CLI application instance with API and configuration
+func NewAppWithConfig(api api.API, cfg *config.Config) *App {
+	app := &App{
+		api:    api,
+		config: cfg,
 	}
 	app.registry = NewCommandRegistry(app)
 	return app

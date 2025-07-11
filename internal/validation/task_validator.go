@@ -1,6 +1,7 @@
 package validation
 
 import (
+	"time-tracker/internal/config"
 	"time-tracker/internal/domain"
 )
 
@@ -13,6 +14,13 @@ type TaskValidator struct {
 func NewTaskValidator() *TaskValidator {
 	return &TaskValidator{
 		validator: NewValidator(),
+	}
+}
+
+// NewTaskValidatorWithConfig creates a new task validator with configuration
+func NewTaskValidatorWithConfig(cfg *config.Config) *TaskValidator {
+	return &TaskValidator{
+		validator: NewValidatorWithConfig(cfg),
 	}
 }
 
@@ -29,9 +37,11 @@ func (tv *TaskValidator) ValidateTaskName(name string) error {
 		return validationError
 	}
 	
-	// Check length constraints (1-255 characters)
-	if !tv.validator.IsValidStringLength(trimmedName, 1, 255) {
-		validationError.AddInvalidLengthError("task_name", trimmedName, 1, 255)
+	// Check length constraints using configured limits
+	if !tv.validator.IsValidTaskNameLength(trimmedName) {
+		minLen := tv.validator.getTaskNameMinLength()
+		maxLen := tv.validator.getTaskNameMaxLength()
+		validationError.AddInvalidLengthError("task_name", trimmedName, minLen, maxLen)
 	}
 	
 	// Check for valid characters

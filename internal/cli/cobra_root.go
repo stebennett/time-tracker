@@ -28,16 +28,67 @@ func NewRootCommand(apiInstance api.API, cfg *config.Config) *RootCommand {
 		Use:   "tt",
 		Short: "A command-line time tracking application",
 		Long: `Time Tracker (tt) is a command-line application for tracking time spent on tasks.
-		
-Features:
-- Start and stop time tracking for named tasks
-- List and filter time entries by time range or task name
-- Export data to CSV format
-- Resume previous tasks
-- Generate summaries and delete tasks
-- Configurable via environment variables and command-line flags`,
+
+FEATURES:
+  • Start and stop time tracking for named tasks
+  • List and filter time entries by time range or task name  
+  • Export data to CSV format
+  • Resume previous tasks from interactive menus
+  • Generate detailed summaries and delete tasks
+  • Fully configurable via environment variables and command-line flags
+
+EXAMPLES:
+  tt start "Working on feature X"          # Start tracking a new task
+  tt list 2h                               # List tasks from last 2 hours
+  tt list 1d "meeting"                     # List tasks from last day containing "meeting"
+  tt current                               # Show currently running task
+  tt stop                                  # Stop all running tasks
+  tt resume                                # Resume a previous task (interactive)
+  tt summary 1w                            # Summary of tasks from last week
+  tt output format=csv > tasks.csv         # Export to CSV file
+
+CONFIGURATION:
+  Configuration follows this priority order: command-line flags > environment variables > defaults
+  
+  Database Configuration:
+    TT_DB_DIR                              Database directory (default: ~/.tt)
+    TT_DB_FILENAME                         Database filename (default: tt.db)
+    TT_DB_QUERY_TIMEOUT                    Query timeout (default: 10s)
+    TT_DB_WRITE_TIMEOUT                    Write timeout (default: 5s)
+  
+  Display Configuration:
+    TT_TIME_DISPLAY_FORMAT                 Time format (default: 2006-01-02 15:04:05)
+    TT_DISPLAY_RUNNING_STATUS              Running status text (default: running)
+    TT_DISPLAY_SUMMARY_WIDTH               Summary display width (default: 75)
+    TT_DISPLAY_DATE_ONLY                   Show date only (default: false)
+  
+  Validation Configuration:
+    TT_VALIDATION_TASK_NAME_MIN            Min task name length (default: 1)
+    TT_VALIDATION_TASK_NAME_MAX            Max task name length (default: 255)
+    TT_VALIDATION_MAX_DURATION             Max time entry duration (default: 24h)
+  
+  Application Configuration:
+    TT_APP_TIMEOUT                         Application timeout (default: 60s)
+    TT_APP_VERBOSE                         Enable verbose output (default: false)
+  
+  Command Configuration:
+    TT_LIST_DEFAULT_FORMAT                 Default list format (default: table)
+    TT_OUTPUT_DEFAULT_FORMAT               Default output format (default: csv)
+
+TIME FORMATS:
+  Use these shorthand formats for time filtering:
+    30m, 2h, 1d, 2w, 3mo, 1y              # Minutes, hours, days, weeks, months, years
+
+GETTING HELP:
+  tt [command] --help                      # Get help for any specific command
+  tt completion bash                       # Generate bash completion script
+  tt completion zsh                        # Generate zsh completion script`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			// Apply configuration overrides from flags before any command runs
+			return root.getConfigFromFlags()
+		},
 	}
 
 	// Add global flags for configuration overrides
@@ -98,7 +149,7 @@ func (r *RootCommand) addSubcommands() {
 			ctx, cancel := context.WithTimeout(context.Background(), r.getAppTimeout())
 			defer cancel()
 			
-			startHandler := NewStartCommand(&App{api: r.api})
+			startHandler := NewStartCommand(NewAppWithConfig(r.api, r.config))
 			return startHandler.Execute(ctx, args)
 		},
 	}
@@ -113,7 +164,7 @@ func (r *RootCommand) addSubcommands() {
 			ctx, cancel := context.WithTimeout(context.Background(), r.getAppTimeout())
 			defer cancel()
 			
-			stopHandler := NewStopCommand(&App{api: r.api})
+			stopHandler := NewStopCommand(NewAppWithConfig(r.api, r.config))
 			return stopHandler.Execute(ctx, args)
 		},
 	}
@@ -136,7 +187,7 @@ Examples:
 			ctx, cancel := context.WithTimeout(context.Background(), r.getAppTimeout())
 			defer cancel()
 			
-			listHandler := NewListCommand(&App{api: r.api})
+			listHandler := NewListCommand(NewAppWithConfig(r.api, r.config))
 			return listHandler.Execute(ctx, args)
 		},
 	}
@@ -151,7 +202,7 @@ Examples:
 			ctx, cancel := context.WithTimeout(context.Background(), r.getAppTimeout())
 			defer cancel()
 			
-			currentHandler := NewCurrentCommand(&App{api: r.api})
+			currentHandler := NewCurrentCommand(NewAppWithConfig(r.api, r.config))
 			return currentHandler.Execute(ctx, args)
 		},
 	}
@@ -172,7 +223,7 @@ Example:
 			ctx, cancel := context.WithTimeout(context.Background(), r.getAppTimeout())
 			defer cancel()
 			
-			outputHandler := NewOutputCommand(&App{api: r.api})
+			outputHandler := NewOutputCommand(NewAppWithConfig(r.api, r.config))
 			return outputHandler.Execute(ctx, args)
 		},
 	}
@@ -193,7 +244,7 @@ Examples:
 			ctx, cancel := context.WithTimeout(context.Background(), r.getAppTimeout()*2)
 			defer cancel()
 			
-			resumeHandler := NewResumeCommand(&App{api: r.api})
+			resumeHandler := NewResumeCommand(NewAppWithConfig(r.api, r.config))
 			return resumeHandler.Execute(ctx, args)
 		},
 	}
@@ -216,7 +267,7 @@ Examples:
 			ctx, cancel := context.WithTimeout(context.Background(), r.getAppTimeout()*2)
 			defer cancel()
 			
-			summaryHandler := NewSummaryCommand(&App{api: r.api})
+			summaryHandler := NewSummaryCommand(NewAppWithConfig(r.api, r.config))
 			return summaryHandler.Execute(ctx, args)
 		},
 	}
@@ -235,7 +286,7 @@ which task to delete from a list of available tasks.`,
 			ctx, cancel := context.WithTimeout(context.Background(), r.getAppTimeout()*2)
 			defer cancel()
 			
-			deleteHandler := NewDeleteCommand(&App{api: r.api})
+			deleteHandler := NewDeleteCommand(NewAppWithConfig(r.api, r.config))
 			return deleteHandler.Execute(ctx, args)
 		},
 	}

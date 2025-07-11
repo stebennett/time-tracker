@@ -5,17 +5,28 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"time-tracker/internal/config"
 )
 
 // Validator provides common validation utilities
 type Validator struct {
 	timeShorthandRegex *regexp.Regexp
+	config             *config.Config
 }
 
 // NewValidator creates a new validator instance
 func NewValidator() *Validator {
 	return &Validator{
 		timeShorthandRegex: regexp.MustCompile(`^(\d+)(m|h|d|w|mo|y)$`),
+		config:             nil, // Use defaults
+	}
+}
+
+// NewValidatorWithConfig creates a new validator instance with configuration
+func NewValidatorWithConfig(cfg *config.Config) *Validator {
+	return &Validator{
+		timeShorthandRegex: regexp.MustCompile(`^(\d+)(m|h|d|w|mo|y)$`),
+		config:             cfg,
 	}
 }
 
@@ -28,6 +39,14 @@ func (v *Validator) IsNonEmptyString(s string) bool {
 func (v *Validator) IsValidStringLength(s string, min, max int) bool {
 	length := len(strings.TrimSpace(s))
 	return length >= min && length <= max
+}
+
+// IsValidTaskNameLength checks if a task name length is within configured limits
+func (v *Validator) IsValidTaskNameLength(name string) bool {
+	length := len(strings.TrimSpace(name))
+	minLen := v.getTaskNameMinLength()
+	maxLen := v.getTaskNameMaxLength()
+	return length >= minLen && length <= maxLen
 }
 
 // IsValidTaskName checks if a task name contains only allowed characters
@@ -48,8 +67,8 @@ func (v *Validator) IsValidTimeRange(startTime time.Time, endTime *time.Time) bo
 
 // IsValidDuration checks if a duration is within reasonable bounds
 func (v *Validator) IsValidDuration(duration time.Duration) bool {
-	// Must be positive and less than 24 hours
-	return duration > 0 && duration <= 24*time.Hour
+	maxDuration := v.getMaxDuration()
+	return duration > 0 && duration <= maxDuration
 }
 
 // IsValidTaskID checks if a task ID is valid (positive)
@@ -103,4 +122,28 @@ func (v *Validator) IsValidDateRange(startTime, endTime *time.Time) bool {
 // TrimAndValidateString trims whitespace and returns the cleaned string
 func (v *Validator) TrimAndValidateString(s string) string {
 	return strings.TrimSpace(s)
+}
+
+// getTaskNameMinLength returns configured minimum task name length or default
+func (v *Validator) getTaskNameMinLength() int {
+	if v.config != nil {
+		return v.config.Validation.TaskNameMinLength
+	}
+	return 1 // Default minimum
+}
+
+// getTaskNameMaxLength returns configured maximum task name length or default
+func (v *Validator) getTaskNameMaxLength() int {
+	if v.config != nil {
+		return v.config.Validation.TaskNameMaxLength
+	}
+	return 255 // Default maximum
+}
+
+// getMaxDuration returns configured maximum duration or default
+func (v *Validator) getMaxDuration() time.Duration {
+	if v.config != nil {
+		return v.config.Validation.MaxDuration
+	}
+	return 24 * time.Hour // Default maximum
 }

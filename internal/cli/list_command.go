@@ -7,17 +7,22 @@ import (
 	"strings"
 	"time"
 	"time-tracker/internal/api"
+	"time-tracker/internal/config"
 	"time-tracker/internal/domain"
 )
 
 // ListCommand handles the list command
 type ListCommand struct {
-	api api.API
+	api    api.API
+	config *config.Config
 }
 
 // NewListCommand creates a new list command handler
 func NewListCommand(app *App) *ListCommand {
-	return &ListCommand{api: app.api}
+	return &ListCommand{
+		api:    app.api,
+		config: app.config,
+	}
 }
 
 // Execute runs the list command
@@ -116,20 +121,52 @@ func (c *ListCommand) printEntries(ctx context.Context, entries []*domain.TimeEn
 	})
 	infos := append(finishedInfos, runningInfos...)
 	for _, info := range infos {
-		startStr := info.StartTime.Format("2006-01-02 15:04:05")
+		// Use configured time format
+		timeFormat := c.getTimeFormat()
+		startStr := info.StartTime.Format(timeFormat)
 		var endStr string
 		var duration time.Duration
 		if info.IsRunning {
-			endStr = "running"
+			endStr = c.getRunningStatus()
 			duration = timeNow().Sub(info.StartTime)
 		} else if info.EndTime != nil {
-			endStr = info.EndTime.Format("2006-01-02 15:04:05")
+			endStr = info.EndTime.Format(timeFormat)
 			duration = info.EndTime.Sub(info.StartTime)
 		}
 		hours := int(duration.Hours())
 		minutes := int(duration.Minutes()) % 60
-		fmt.Printf("%s - %s (%dh %dm): %s\n", startStr, endStr, hours, minutes, info.TaskName)
+		
+		// Truncate task name if configured
+		taskName := c.truncateTaskName(info.TaskName)
+		fmt.Printf("%s - %s (%dh %dm): %s\n", startStr, endStr, hours, minutes, taskName)
 	}
 
 	return nil
+}
+
+// getTimeFormat returns the configured time format or default
+func (c *ListCommand) getTimeFormat() string {
+	if c.config != nil && c.config.Time.DisplayFormat != "" {
+		return c.config.Time.DisplayFormat
+	}
+	return "2006-01-02 15:04:05" // Default format
+}
+
+// getRunningStatus returns the configured running status text or default
+func (c *ListCommand) getRunningStatus() string {
+	if c.config != nil && c.config.Display.RunningStatus != "" {
+		return c.config.Display.RunningStatus
+	}
+	return "running" // Default status
+}
+
+// truncateTaskName truncates task name if it exceeds configured limit
+func (c *ListCommand) truncateTaskName(taskName string) string {
+	if c.config != nil && c.config.Display.SummaryWidth > 0 {
+		maxLen := c.config.Display.SummaryWidth - 30 // Reserve space for time info
+		if maxLen > 0 && len(taskName) > maxLen {
+			return taskName[:maxLen-3] + "..."
+		}
+	}
+	return taskName
 }

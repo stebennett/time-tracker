@@ -36,13 +36,7 @@ func main() {
 	// Create Cobra root command with configuration
 	rootCmd := cli.NewRootCommand(apiInstance, cfg)
 
-	// Apply configuration overrides from command-line flags
-	if err := rootCmd.PreRun(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error processing command-line flags: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Execute the root command
+	// Execute the root command (PreRun will handle flag processing)
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
