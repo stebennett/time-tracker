@@ -18,12 +18,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Create repository factory based on environment
-	env := config.GetEnvironment()
-	factory := config.NewRepositoryFactory(env)
-
-	// Create repository with dependency injection using configuration
-	repo, err := factory.CreateRepository()
+	// Create repository using configuration
+	repo, err := config.CreateRepository(cfg)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error creating repository: %v\n", err)
 		os.Exit(1)

@@ -7,7 +7,8 @@
       "Bash(find:*)",
       "Bash(./scripts/e2e-test.sh:*)",
       "Bash(TT_DB=/tmp/tt_test.db ./tt-e2e-test:*)",
-      "Bash(TT_DB:*)"
+      "Bash(TT_DB:*)",
+      "Bash(gh issue create:*)"
     ],
     "deny": []
   }
