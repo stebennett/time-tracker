@@ -233,9 +233,9 @@ verify_output "No task is currently running" "$output" "No running task message"
 output=$(run_cmd "$TEST_BINARY stop" "Stop with no running tasks")
 verify_output "All running tasks have been stopped" "$output" "Stop with no running tasks"
 
-# Test with empty task name
-output=$(run_cmd "$TEST_BINARY start ''" "Start task with empty name")
-verify_output "Started new task:" "$output" "Empty task name handled"
+# Test with empty task name (should fail)
+output=$(run_cmd "$TEST_BINARY start ''" "Start task with empty name" 2>&1 || true)
+verify_output "Error:" "$output" "Empty task name properly rejected"
 
 # Test with special characters
 output=$(run_cmd "$TEST_BINARY start 'Task with special chars'" "Start task with special chars")
