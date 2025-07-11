@@ -338,6 +338,6 @@ type AppError struct {
 - **Next Logical Step**: Domain model separation (most impactful for maintainability)
 - **Testing Strategy**: Always create tests before implementing changes
 - **Compatibility**: Maintain 100% backward compatibility for user experience
-- **Database**: Use `TT_DB=/tmp/tt_test.db` for testing to avoid production interference
+- **Database**: Use `TT_DB_DIR=/tmp TT_DB_FILENAME=tt_test.db` for testing to avoid production interference
 
 Each recommendation includes full context, implementation details, and acceptance criteria to enable picking up any task individually in future sessions.

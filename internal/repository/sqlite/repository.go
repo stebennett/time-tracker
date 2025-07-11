@@ -14,11 +14,12 @@ import (
 )
 
 // Database operation timeout constants
+// Note: These are now configurable via Config, these are fallback defaults
 const (
-	// DatabaseQueryTimeout is the maximum time allowed for database queries
-	DatabaseQueryTimeout = 10 * time.Second
-	// DatabaseWriteTimeout is the maximum time allowed for database writes
-	DatabaseWriteTimeout = 5 * time.Second
+	// DefaultDatabaseQueryTimeout is the default maximum time allowed for database queries
+	DefaultDatabaseQueryTimeout = 10 * time.Second
+	// DefaultDatabaseWriteTimeout is the default maximum time allowed for database writes
+	DefaultDatabaseWriteTimeout = 5 * time.Second
 )
 
 
@@ -55,9 +56,16 @@ type Repository interface {
 	Close() error
 }
 
+// DatabaseConfig interface for repository configuration
+type DatabaseConfig interface {
+	GetQueryTimeout() time.Duration
+	GetWriteTimeout() time.Duration
+}
+
 // SQLiteRepository implements the Repository interface
 type SQLiteRepository struct {
-	db *sql.DB
+	db     *sql.DB
+	config DatabaseConfig
 }
 
 // withTimeout creates a context with timeout for database operations
@@ -65,8 +73,31 @@ func (r *SQLiteRepository) withTimeout(ctx context.Context, timeout time.Duratio
 	return context.WithTimeout(ctx, timeout)
 }
 
+// withQueryTimeout creates a context with query timeout
+func (r *SQLiteRepository) withQueryTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
+	timeout := DefaultDatabaseQueryTimeout
+	if r.config != nil {
+		timeout = r.config.GetQueryTimeout()
+	}
+	return context.WithTimeout(ctx, timeout)
+}
+
+// withWriteTimeout creates a context with write timeout
+func (r *SQLiteRepository) withWriteTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
+	timeout := DefaultDatabaseWriteTimeout
+	if r.config != nil {
+		timeout = r.config.GetWriteTimeout()
+	}
+	return context.WithTimeout(ctx, timeout)
+}
+
 // New creates a new SQLite repository instance
 func New(dbPath string) (*SQLiteRepository, error) {
+	return NewWithConfig(dbPath, nil)
+}
+
+// NewWithConfig creates a new SQLite repository instance with configuration
+func NewWithConfig(dbPath string, config DatabaseConfig) (*SQLiteRepository, error) {
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		return nil, errors.NewDatabaseError("open database", err)
@@ -78,7 +109,7 @@ func New(dbPath string) (*SQLiteRepository, error) {
 		return nil, errors.NewDatabaseError("run migrations", err)
 	}
 
-	return &SQLiteRepository{db: db}, nil
+	return &SQLiteRepository{db: db, config: config}, nil
 }
 
 // Close closes the database connection
@@ -89,7 +120,7 @@ func (r *SQLiteRepository) Close() error {
 // CreateTimeEntry creates a new time entry
 func (r *SQLiteRepository) CreateTimeEntry(ctx context.Context, entry *TimeEntry) error {
 	// Add timeout for write operations
-	timeoutCtx, cancel := r.withTimeout(ctx, DatabaseWriteTimeout)
+	timeoutCtx, cancel := r.withWriteTimeout(ctx)
 	defer cancel()
 	
 	query := `
@@ -108,7 +139,7 @@ func (r *SQLiteRepository) CreateTimeEntry(ctx context.Context, entry *TimeEntry
 // GetTimeEntry retrieves a time entry by ID
 func (r *SQLiteRepository) GetTimeEntry(ctx context.Context, id int64) (*TimeEntry, error) {
 	// Add timeout for read operations
-	timeoutCtx, cancel := r.withTimeout(ctx, DatabaseQueryTimeout)
+	timeoutCtx, cancel := r.withQueryTimeout(ctx)
 	defer cancel()
 	
 	query := `
@@ -183,7 +214,7 @@ func (r *SQLiteRepository) DeleteTask(ctx context.Context, id int64) error {
 // SearchTimeEntries searches for time entries based on the provided options
 func (r *SQLiteRepository) SearchTimeEntries(ctx context.Context, opts SearchOptions) ([]*TimeEntry, error) {
 	// Add timeout for potentially long-running search operations
-	timeoutCtx, cancel := r.withTimeout(ctx, DatabaseQueryTimeout)
+	timeoutCtx, cancel := r.withQueryTimeout(ctx)
 	defer cancel()
 	var conditions []string
 	var args []interface{}

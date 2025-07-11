@@ -14,7 +14,8 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Test configuration
-TEST_DB="/tmp/tt_e2e_test.db"
+TEST_DB_DIR="/tmp"
+TEST_DB_FILENAME="tt_e2e_test.db"
 TEST_BINARY="./tt-e2e-test"
 
 # Helper functions
@@ -38,8 +39,8 @@ run_cmd() {
     local cmd="$1"
     local description="$2"
     log_info "Running: $description"
-    echo "  Command: TT_DB=$TEST_DB $cmd"
-    TT_DB=$TEST_DB eval "$cmd"
+    echo "  Command: TT_DB_DIR=$TEST_DB_DIR TT_DB_FILENAME=$TEST_DB_FILENAME $cmd"
+    TT_DB_DIR=$TEST_DB_DIR TT_DB_FILENAME=$TEST_DB_FILENAME eval "$cmd"
     echo
 }
 
@@ -60,7 +61,7 @@ verify_output() {
 
 cleanup() {
     log_info "Cleaning up test artifacts..."
-    rm -f "$TEST_DB" "$TEST_BINARY"
+    rm -f "$TEST_DB_DIR/$TEST_DB_FILENAME" "$TEST_BINARY"
 }
 
 # Trap to ensure cleanup on exit
@@ -80,7 +81,7 @@ echo
 
 # 2. Clean test database
 log_info "Setting up clean test environment..."
-rm -f "$TEST_DB"
+rm -f "$TEST_DB_DIR/$TEST_DB_FILENAME"
 log_success "Test environment ready"
 echo
 
@@ -274,9 +275,9 @@ echo "=========================================="
 
 log_info "Creating multiple tasks for performance test..."
 for i in {1..10}; do
-    TT_DB=$TEST_DB $TEST_BINARY start "Perf Test Task $i" > /dev/null
+    TT_DB_DIR=$TEST_DB_DIR TT_DB_FILENAME=$TEST_DB_FILENAME $TEST_BINARY start "Perf Test Task $i" > /dev/null
 done
-TT_DB=$TEST_DB $TEST_BINARY stop > /dev/null
+TT_DB_DIR=$TEST_DB_DIR TT_DB_FILENAME=$TEST_DB_FILENAME $TEST_BINARY stop > /dev/null
 
 # Time the list command
 start_time=$(date +%s%N)

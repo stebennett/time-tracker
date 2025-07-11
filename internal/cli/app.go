@@ -3,13 +3,12 @@ package cli
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"time"
 
 	"time-tracker/internal/api"
+	"time-tracker/internal/config"
 	"time-tracker/internal/errors"
 	"time-tracker/internal/repository/sqlite"
 )
@@ -23,28 +22,6 @@ type App struct {
 	registry *CommandRegistry
 }
 
-// GetDatabasePath returns the path to the SQLite database file
-func GetDatabasePath() (string, error) {
-	// Check for TT_DB environment variable
-	if dbPath := os.Getenv("TT_DB"); dbPath != "" {
-		return dbPath, nil
-	}
-
-	// Get user's home directory
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("failed to get user home directory: %w", err)
-	}
-
-	// Create .tt directory if it doesn't exist
-	ttDir := filepath.Join(homeDir, ".tt")
-	if err := os.MkdirAll(ttDir, 0755); err != nil {
-		return "", fmt.Errorf("failed to create .tt directory: %w", err)
-	}
-
-	// Return path to tt.db in .tt directory
-	return filepath.Join(ttDir, "tt.db"), nil
-}
 
 // NewApp creates a new CLI application instance with dependency injection
 func NewApp(api api.API) *App {
@@ -58,14 +35,18 @@ func NewApp(api api.API) *App {
 // NewAppWithDefaultRepository creates a new CLI application instance with the default SQLite repository
 // This maintains backward compatibility and is used for production
 func NewAppWithDefaultRepository() (*App, error) {
-	// Get database path
-	dbPath, err := GetDatabasePath()
+	// Load configuration
+	loader := config.NewLoader()
+	cfg, err := loader.Load()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get database path: %w", err)
+		return nil, fmt.Errorf("failed to load configuration: %w", err)
 	}
 
-	// Initialize SQLite repository
-	repo, err := sqlite.New(dbPath)
+	// Get database path from configuration
+	dbPath := cfg.GetDatabasePath()
+
+	// Initialize SQLite repository with configuration
+	repo, err := sqlite.NewWithConfig(dbPath, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize database: %w", err)
 	}

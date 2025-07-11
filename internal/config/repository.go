@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 
-	"time-tracker/internal/cli"
 	"time-tracker/internal/repository/sqlite"
 )
 
@@ -72,16 +71,20 @@ func (rf *RepositoryFactory) createTestingRepository() (sqlite.Repository, error
 }
 
 // createProductionRepository creates a repository for production
-// Uses the default SQLite database location
+// Uses the configuration-based database location
 func (rf *RepositoryFactory) createProductionRepository() (sqlite.Repository, error) {
-	// Get database path using the existing logic
-	dbPath, err := cli.GetDatabasePath()
+	// Load configuration to get database path
+	loader := NewLoader()
+	config, err := loader.Load()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get database path: %w", err)
+		return nil, fmt.Errorf("failed to load configuration: %w", err)
 	}
 
-	// Initialize SQLite repository
-	repo, err := sqlite.New(dbPath)
+	// Get database path from configuration
+	dbPath := config.GetDatabasePath()
+
+	// Initialize SQLite repository with configuration
+	repo, err := sqlite.NewWithConfig(dbPath, config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize production database: %w", err)
 	}

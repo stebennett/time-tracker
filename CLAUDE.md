@@ -36,18 +36,19 @@ go mod tidy
 # Build test binary
 go build -o tt-test cmd/tt/main.go
 
-# Run commands with test database
-TT_DB=/tmp/tt_test.db ./tt-test start "Test task"
-TT_DB=/tmp/tt_test.db ./tt-test current
-TT_DB=/tmp/tt_test.db ./tt-test list
-TT_DB=/tmp/tt_test.db ./tt-test stop
+# Run commands with test database using separate directory and filename
+TT_DB_DIR=/tmp TT_DB_FILENAME=tt_test.db ./tt-test start "Test task"
+TT_DB_DIR=/tmp TT_DB_FILENAME=tt_test.db ./tt-test current
+TT_DB_DIR=/tmp TT_DB_FILENAME=tt_test.db ./tt-test list
+TT_DB_DIR=/tmp TT_DB_FILENAME=tt_test.db ./tt-test stop
 
-# Or export the environment variable for multiple commands
-export TT_DB=/tmp/tt_test.db
+# Or export the environment variables for multiple commands
+export TT_DB_DIR=/tmp
+export TT_DB_FILENAME=tt_test.db
 ./tt-test start "Test task"
 ./tt-test current
 ./tt-test stop
-unset TT_DB
+unset TT_DB_DIR TT_DB_FILENAME
 ```
 
 ### End-to-End Testing
@@ -69,7 +70,7 @@ The script uses a separate test database and provides detailed success/failure r
 
 ### Database Configuration
 - Production: `~/.tt/tt.db` (Linux/macOS) or `%USERPROFILE%\.tt\tt.db` (Windows)
-- Test: Use `TT_DB` environment variable to specify alternative location
+- Test: Use `TT_DB_DIR` and `TT_DB_FILENAME` environment variables to specify alternative location
 - Unit tests: Use in-memory mock implementations
 
 ### Testing
@@ -115,7 +116,37 @@ The project uses Go's built-in testing framework with `github.com/stretchr/testi
 
 The application uses SQLite with configurable location:
 - Default: `~/.tt/tt.db` (Linux/macOS) or `%USERPROFILE%\.tt\tt.db` (Windows)
-- Override with `TT_DB` environment variable
+- Configure with `TT_DB_DIR` and `TT_DB_FILENAME` environment variables
+
+### Configuration Options
+
+The application supports 16 configuration options via environment variables:
+
+#### Database Configuration
+- `TT_DB_DIR` - Database directory (default: `~/.tt`)
+- `TT_DB_FILENAME` - Database filename (default: `tt.db`)
+- `TT_DB_QUERY_TIMEOUT` - Database query timeout (default: `10s`)
+- `TT_DB_WRITE_TIMEOUT` - Database write timeout (default: `5s`)
+- `TT_DB_DIR_PERMISSIONS` - Directory permissions (default: `0755`)
+
+#### Time and Display Configuration
+- `TT_TIME_DISPLAY_FORMAT` - Time display format (default: `2006-01-02 15:04:05`)
+- `TT_DISPLAY_SUMMARY_WIDTH` - Summary table width (default: `75`)
+- `TT_DISPLAY_RUNNING_STATUS` - Running status text (default: `running`)
+- `TT_DISPLAY_DATE_ONLY` - Show date only (default: `false`)
+
+#### Validation Configuration
+- `TT_VALIDATION_TASK_NAME_MIN` - Minimum task name length (default: `1`)
+- `TT_VALIDATION_TASK_NAME_MAX` - Maximum task name length (default: `255`)
+- `TT_VALIDATION_MAX_DURATION` - Maximum time entry duration (default: `24h`)
+
+#### Application Configuration
+- `TT_APP_TIMEOUT` - Application timeout (default: `60s`)
+- `TT_APP_VERBOSE` - Verbose output (default: `false`)
+
+#### Command Defaults
+- `TT_LIST_DEFAULT_FORMAT` - Default list format (default: `table`)
+- `TT_OUTPUT_DEFAULT_FORMAT` - Default output format (default: `csv`)
 
 ## Coding Standards (from .cursor/rules/)
 

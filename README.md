@@ -43,13 +43,15 @@ The time tracker stores its data in a SQLite database. By default, it's located 
 - Windows: `%USERPROFILE%\.tt\tt.db`
 - Linux/macOS: `~/.tt/tt.db`
 
-To use a custom database location, set the `TT_DB` environment variable:
+To use a custom database location, set the `TT_DB_DIR` and `TT_DB_FILENAME` environment variables:
 ```bash
 # Windows
-set TT_DB=C:\custom\path\to\tt.db
+set TT_DB_DIR=C:\custom\path
+set TT_DB_FILENAME=tt.db
 
 # Linux/macOS
-export TT_DB=/custom/path/to/tt.db
+export TT_DB_DIR=/custom/path
+export TT_DB_FILENAME=tt.db
 ```
 
 ## Usage

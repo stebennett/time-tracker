@@ -127,7 +127,7 @@ If the script fails:
 
 1. **Check the error message** - The script provides detailed error information
 2. **Review the actual vs expected output** - Failed assertions show what was expected
-3. **Run individual commands manually** - Use the same `TT_DB=/tmp/tt_e2e_test.db` prefix
+3. **Run individual commands manually** - Use the same `TT_DB_DIR=/tmp TT_DB_FILENAME=tt_e2e_test.db` prefix
 4. **Check for recent code changes** - The failure might indicate a regression
 
 ### Maintenance

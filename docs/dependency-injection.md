@@ -90,7 +90,7 @@ export TT_ENV=production
 ```
 
 - Uses the default SQLite database location (`~/.tt/tt.db`)
-- Respects the `TT_DB` environment variable for custom database paths
+- Respects the `TT_DB_DIR` and `TT_DB_FILENAME` environment variables for custom database paths
 - Creates the `.tt` directory if it doesn't exist
 
 ## Usage Examples
