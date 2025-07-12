@@ -164,14 +164,93 @@ The application supports 16 configuration options via environment variables:
 - Never commit secrets or credentials
 - Use environment variables for configuration
 
+## Test-Driven Development (TDD) Rules
+
+### **MANDATORY TDD Process**
+All new API methods and business logic MUST follow strict TDD:
+
+1. **Red Phase**: Write failing behavioral tests first
+   - NO implementation code until tests are written
+   - Tests should fail with `panic("not implemented")` initially
+   - Focus on expected behavior, not implementation details
+
+2. **Green Phase**: Write minimal implementation to pass tests
+   - Implement only enough code to make tests pass
+   - Use direct dependencies (repository, validators, mappers)
+   - No delegation to existing API layers
+
+3. **Refactor Phase**: Improve code while keeping tests green
+   - Extract services later without changing interface contracts
+   - Maintain behavioral test integrity throughout refactoring
+
+### **Outside-In Development Pattern**
+**REQUIRED** for all new API development:
+
+- **Start from Interface**: Define business API contract first
+- **Direct Dependencies**: New APIs call repository/validation directly
+- **No API Coupling**: Never delegate to existing API layers
+- **Service Extraction**: Extract to services later as implementation detail
+
+### **Testing Standards**
+
+#### Behavioral Testing Requirements
+- Test business behavior, not implementation
+- Use real dependencies with in-memory database
+- Setup test data through repository, not through APIs
+- Assert on business outcomes and error types
+
+#### Error Handling Standards
+```go
+// REQUIRED: Use proper AppError assertion pattern
+var appErr *errors.AppError
+assert.ErrorAs(t, err, &appErr)
+assert.True(t, appErr.IsType(errors.ErrorTypeValidation))
+```
+
+#### Test Structure Requirements
+- Use table-driven tests with clear test case names
+- Follow AAA pattern: Arrange, Act, Assert
+- Include success cases, validation errors, and not found scenarios
+- Test data should be minimal and focused on specific scenarios
+
+### **Implementation Standards**
+
+#### Business API Pattern
+```go
+func (b *businessAPIImpl) MethodName(ctx context.Context, params) (*Result, error) {
+    // 1. Validate inputs using business validators
+    if err := b.validator.ValidateInput(params); err != nil {
+        return nil, errors.NewValidationError("description", err)
+    }
+    
+    // 2. Call repository directly
+    dbResult, err := b.repo.Operation(ctx, params)
+    if err != nil {
+        return nil, err // Repository returns proper AppErrors
+    }
+    
+    // 3. Convert to domain model
+    domainResult := b.mapper.FromDatabase(*dbResult)
+    return &domainResult, nil
+}
+```
+
+#### Dependency Structure
+- Repository for data operations
+- Domain mapper for data conversion  
+- Validators for business rule enforcement
+- NO coupling to existing API layers
+
 ## Testing Approach
 
-- Unit tests for all business logic
-- Table-driven tests in Go
-- Follow AAA (Arrange-Act-Assert) pattern
-- Mock external dependencies
-- Use `testing` package for Go tests
-- Tests located alongside source files with `_test.go` suffix
+- **Strict TDD**: Red-Green-Refactor cycle for all new code
+- **Behavioral Focus**: Test observable business behavior
+- **Outside-In Design**: Start from interface, work toward implementation
+- **Table-driven tests**: Comprehensive scenarios with clear naming
+- **Real Dependencies**: In-memory database, actual validators
+- **AppError Standards**: Proper error type assertions using `ErrorAs`
+- **AAA Pattern**: Arrange-Act-Assert structure
+- **Test Isolation**: Each test sets up its own clean state
 
 ## CLI Commands
 
