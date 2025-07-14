@@ -14,12 +14,12 @@ import (
 
 // OutputCommand handles the output command
 type OutputCommand struct {
-	api api.API
+	businessAPI api.BusinessAPI
 }
 
 // NewOutputCommand creates a new output command handler
 func NewOutputCommand(app *App) *OutputCommand {
-	return &OutputCommand{api: app.api}
+	return &OutputCommand{businessAPI: app.businessAPI}
 }
 
 // Execute runs the output command
@@ -50,10 +50,10 @@ func (c *OutputCommand) outputTasks(ctx context.Context, args []string) error {
 
 // outputCSV outputs all tasks in CSV format
 func (c *OutputCommand) outputCSV(ctx context.Context) error {
-	// Get all tasks
-	entries, err := c.api.ListTimeEntries(ctx)
+	// Get all time entries with task information using BusinessAPI
+	entries, err := c.businessAPI.SearchTimeEntries(ctx, "", "")
 	if err != nil {
-		return fmt.Errorf("failed to list tasks: %w", err)
+		return fmt.Errorf("failed to get time entries: %w", err)
 	}
 
 	// Create CSV writer
@@ -67,7 +67,9 @@ func (c *OutputCommand) outputCSV(ctx context.Context) error {
 	}
 
 	// Write entries
-	for _, entry := range entries {
+	for _, entryWithTask := range entries {
+		entry := entryWithTask.TimeEntry
+		
 		// Format start time
 		startTime := entry.StartTime.Format(time.RFC3339)
 
@@ -79,18 +81,13 @@ func (c *OutputCommand) outputCSV(ctx context.Context) error {
 			duration = entry.EndTime.Sub(entry.StartTime).Hours()
 		}
 
-		task, err := c.api.GetTask(ctx, entry.TaskID)
-		if err != nil {
-			return fmt.Errorf("failed to get task for entry %d: %w", entry.ID, err)
-		}
-
 		// Write row
 		row := []string{
 			strconv.FormatInt(entry.ID, 10),
 			startTime,
 			endTime,
 			fmt.Sprintf("%.2f", duration),
-			task.TaskName,
+			entryWithTask.Task.TaskName,
 		}
 		if err := writer.Write(row); err != nil {
 			return fmt.Errorf("failed to write CSV row: %w", err)

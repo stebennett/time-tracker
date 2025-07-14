@@ -18,34 +18,34 @@ var timeNow = time.Now
 
 // App represents the main CLI application
 type App struct {
-	api      api.API
-	config   *config.Config
-	registry *CommandRegistry
+	businessAPI api.BusinessAPI // BusinessAPI for all commands
+	config      *config.Config
+	registry    *CommandRegistry
 }
 
 
-// NewApp creates a new CLI application instance with dependency injection
-func NewApp(api api.API) *App {
+// NewApp creates a new CLI application instance with BusinessAPI
+func NewApp(businessAPI api.BusinessAPI) *App {
 	app := &App{
-		api:    api,
-		config: nil, // Will be set by caller
+		businessAPI: businessAPI,
+		config:      nil, // Will be set by caller
 	}
 	app.registry = NewCommandRegistry(app)
 	return app
 }
 
-// NewAppWithConfig creates a new CLI application instance with API and configuration
-func NewAppWithConfig(api api.API, cfg *config.Config) *App {
+// NewAppWithConfig creates a new CLI application instance with BusinessAPI and configuration
+func NewAppWithConfig(businessAPI api.BusinessAPI, cfg *config.Config) *App {
 	app := &App{
-		api:    api,
-		config: cfg,
+		businessAPI: businessAPI,
+		config:      cfg,
 	}
 	app.registry = NewCommandRegistry(app)
 	return app
 }
 
 // NewAppWithDefaultRepository creates a new CLI application instance with the default SQLite repository
-// This maintains backward compatibility and is used for production
+// This is used for production and creates only the BusinessAPI
 func NewAppWithDefaultRepository() (*App, error) {
 	// Load configuration
 	loader := config.NewLoader()
@@ -63,11 +63,12 @@ func NewAppWithDefaultRepository() (*App, error) {
 		return nil, fmt.Errorf("failed to initialize database: %w", err)
 	}
 
-	// Create API instance
-	apiInstance := api.New(repo)
+	// Create BusinessAPI instance
+	businessAPI := api.NewBusinessAPI(repo)
 
 	app := &App{
-		api: apiInstance,
+		businessAPI: businessAPI,
+		config:      cfg,
 	}
 	app.registry = NewCommandRegistry(app)
 	return app, nil

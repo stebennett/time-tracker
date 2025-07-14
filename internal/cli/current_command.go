@@ -2,19 +2,20 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time-tracker/internal/api"
-	"time-tracker/internal/domain"
+	appErrors "time-tracker/internal/errors"
 )
 
 // CurrentCommand handles the current command
 type CurrentCommand struct {
-	api api.API
+	businessAPI api.BusinessAPI
 }
 
 // NewCurrentCommand creates a new current command handler
 func NewCurrentCommand(app *App) *CurrentCommand {
-	return &CurrentCommand{api: app.api}
+	return &CurrentCommand{businessAPI: app.businessAPI}
 }
 
 // Execute runs the current command
@@ -24,30 +25,18 @@ func (c *CurrentCommand) Execute(ctx context.Context, args []string) error {
 
 // showCurrentTask displays the currently running task
 func (c *CurrentCommand) showCurrentTask(ctx context.Context) error {
-	// Search for tasks with no end time
-	opts := domain.SearchOptions{}
-	entries, err := c.api.SearchTimeEntries(ctx, opts)
+	// Use BusinessAPI's GetCurrentSession
+	session, err := c.businessAPI.GetCurrentSession(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to search for running tasks: %w", err)
+		// Check if it's a "not found" error
+		var appErr *appErrors.AppError
+		if errors.As(err, &appErr) && appErr.IsType(appErrors.ErrorTypeNotFound) {
+			fmt.Println("No task is currently running")
+			return nil
+		}
+		return fmt.Errorf("failed to get current session: %w", err)
 	}
 
-	if len(entries) == 0 {
-		fmt.Println("No task is currently running")
-		return nil
-	}
-
-	// Get the most recent running task
-	entry := entries[0]
-	duration := timeNow().Sub(entry.StartTime)
-	hours := int(duration.Hours())
-	minutes := int(duration.Minutes()) % 60
-
-	task, err := c.api.GetTask(ctx, entry.TaskID)
-	if err != nil {
-		return fmt.Errorf("failed to get task for entry %d: %w", entry.ID, err)
-	}
-
-	fmt.Printf("Current task: %s (running for %dh %dm)\n",
-		task.TaskName, hours, minutes)
+	fmt.Printf("Current task: %s (%s)\n", session.Task.TaskName, session.Duration)
 	return nil
 }

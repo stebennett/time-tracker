@@ -4,18 +4,17 @@ import (
 	"context"
 	"fmt"
 	"time-tracker/internal/api"
-	"time-tracker/internal/domain"
 	"time-tracker/internal/errors"
 )
 
 // StopCommand handles the stop command
 type StopCommand struct {
-	api api.API
+	businessAPI api.BusinessAPI
 }
 
 // NewStopCommand creates a new stop command handler
 func NewStopCommand(app *App) *StopCommand {
-	return &StopCommand{api: app.api}
+	return &StopCommand{businessAPI: app.businessAPI}
 }
 
 // Execute runs the stop command
@@ -28,23 +27,13 @@ func (c *StopCommand) Execute(ctx context.Context, args []string) error {
 
 // stopRunningTasks marks all running tasks as complete
 func (c *StopCommand) stopRunningTasks(ctx context.Context) error {
-	// Search for tasks with no end time
-	opts := domain.SearchOptions{}
-	entries, err := c.api.SearchTimeEntries(ctx, opts)
+	// Use BusinessAPI's StopAllRunningTasks
+	_, err := c.businessAPI.StopAllRunningTasks(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to search for running tasks: %w", err)
+		return fmt.Errorf("failed to stop running tasks: %w", err)
 	}
 
-	now := timeNow()
-	for _, entry := range entries {
-		if entry.EndTime == nil {
-			entry.EndTime = &now
-			if err := c.api.UpdateTimeEntry(ctx, entry.ID, entry.StartTime, entry.EndTime, entry.TaskID); err != nil {
-				return fmt.Errorf("failed to update task %d: %w", entry.ID, err)
-			}
-		}
-	}
-
+	// Always show the same message for backward compatibility with e2e tests
 	fmt.Println("All running tasks have been stopped")
 	return nil
 }

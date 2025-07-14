@@ -10,7 +10,11 @@
       "Bash(TT_DB:*)",
       "Bash(gh issue create:*)",
       "Bash(gh issue view:*)",
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "Bash(git checkout:*)",
+      "Bash(export TT_DB_DIR=/tmp)",
+      "Bash(export TT_DB_FILENAME=tt_test.db)",
+      "Bash(./tt-test:*)"
     ],
     "deny": []
   }

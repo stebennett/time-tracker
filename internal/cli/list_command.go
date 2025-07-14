@@ -5,23 +5,21 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"time"
 	"time-tracker/internal/api"
 	"time-tracker/internal/config"
-	"time-tracker/internal/domain"
 )
 
 // ListCommand handles the list command
 type ListCommand struct {
-	api    api.API
-	config *config.Config
+	businessAPI api.BusinessAPI
+	config      *config.Config
 }
 
 // NewListCommand creates a new list command handler
 func NewListCommand(app *App) *ListCommand {
 	return &ListCommand{
-		api:    app.api,
-		config: app.config,
+		businessAPI: app.businessAPI,
+		config:      app.config,
 	}
 }
 
@@ -32,113 +30,81 @@ func (c *ListCommand) Execute(ctx context.Context, args []string) error {
 
 // listTasks handles the list command with various options
 func (c *ListCommand) listTasks(ctx context.Context, args []string) error {
-	opts := domain.SearchOptions{}
+	var timeRange string
+	var textFilter string
 
 	// If no arguments, list all tasks
 	if len(args) == 0 {
-		entries, err := c.api.ListTimeEntries(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to list tasks: %w", err)
-		}
-		return c.printEntries(ctx, entries)
-	}
-
-	// Check if first argument is a time shorthand
-	if duration, err := parseTimeShorthand(args[0]); err == nil {
-		// Time shorthand found, set time range
-		now := timeNow()
-		startTime := now.Add(-duration)
-		opts.StartTime = &startTime
-		opts.EndTime = &now
-
-		// If there are more arguments, use them as search text
-		if len(args) > 1 {
-			text := strings.Join(args[1:], " ")
-			opts.TaskName = &text
-		}
+		timeRange = ""
+		textFilter = ""
 	} else {
-		// No time shorthand, treat all arguments as search text
-		text := strings.Join(args, " ")
-		opts.TaskName = &text
+		// Check if first argument is a time shorthand
+		if _, err := parseTimeShorthand(args[0]); err == nil {
+			// Time shorthand found
+			timeRange = args[0]
+			
+			// If there are more arguments, use them as search text
+			if len(args) > 1 {
+				textFilter = strings.Join(args[1:], " ")
+			}
+		} else {
+			// No time shorthand, treat all arguments as search text
+			textFilter = strings.Join(args, " ")
+		}
 	}
 
-	// Search for entries
-	entries, err := c.api.SearchTimeEntries(ctx, opts)
+	// Search for time entries with task information using BusinessAPI
+	entries, err := c.businessAPI.SearchTimeEntries(ctx, timeRange, textFilter)
 	if err != nil {
 		return fmt.Errorf("failed to search tasks: %w", err)
 	}
 
-	return c.printEntries(ctx, entries)
+	return c.printTimeEntries(ctx, entries)
 }
 
-// printEntries prints one line per task in the format:
+// printTimeEntries prints one line per time entry in the format:
 // startTime - endTime (duration): taskName
-// Where startTime and endTime are from the last time entry for the task, and endTime is 'running' if the entry is running.
-func (c *ListCommand) printEntries(ctx context.Context, entries []*domain.TimeEntry) error {
+// Where endTime is 'running' if the entry is running.
+func (c *ListCommand) printTimeEntries(ctx context.Context, entries []*api.TimeEntryWithTask) error {
 	if len(entries) == 0 {
 		fmt.Println("No tasks found")
 		return nil
 	}
 
-	// Group entries by TaskID and find the last entry for each task
-	type lastEntryInfo struct {
-		TaskName  string
-		StartTime time.Time
-		EndTime   *time.Time
-		IsRunning bool
-	}
-	lastEntryMap := make(map[int64]*lastEntryInfo)
+	// Sort entries: non-running tasks by StartTime ascending, running tasks last
+	var runningEntries, finishedEntries []*api.TimeEntryWithTask
 	for _, entry := range entries {
-		task, err := c.api.GetTask(ctx, entry.TaskID)
-		if err != nil {
-			return fmt.Errorf("failed to get task for entry %d: %w", entry.ID, err)
-		}
-		info, ok := lastEntryMap[entry.TaskID]
-		if !ok || entry.StartTime.After(info.StartTime) {
-			lastEntryMap[entry.TaskID] = &lastEntryInfo{
-				TaskName:  task.TaskName,
-				StartTime: entry.StartTime,
-				EndTime:   entry.EndTime,
-				IsRunning: entry.EndTime == nil,
-			}
-		}
-	}
-
-	// Collect and sort: non-running tasks by StartTime ascending, running tasks last
-	var runningInfos, finishedInfos []*lastEntryInfo
-	for _, info := range lastEntryMap {
-		if info.IsRunning {
-			runningInfos = append(runningInfos, info)
+		if entry.TimeEntry.EndTime == nil {
+			runningEntries = append(runningEntries, entry)
 		} else {
-			finishedInfos = append(finishedInfos, info)
+			finishedEntries = append(finishedEntries, entry)
 		}
 	}
-	sort.Slice(finishedInfos, func(i, j int) bool {
-		return finishedInfos[i].StartTime.Before(finishedInfos[j].StartTime)
+	
+	sort.Slice(finishedEntries, func(i, j int) bool {
+		return finishedEntries[i].TimeEntry.StartTime.Before(finishedEntries[j].TimeEntry.StartTime)
 	})
-	sort.Slice(runningInfos, func(i, j int) bool {
-		return runningInfos[i].StartTime.Before(runningInfos[j].StartTime)
+	sort.Slice(runningEntries, func(i, j int) bool {
+		return runningEntries[i].TimeEntry.StartTime.Before(runningEntries[j].TimeEntry.StartTime)
 	})
-	infos := append(finishedInfos, runningInfos...)
-	for _, info := range infos {
+	
+	sortedEntries := append(finishedEntries, runningEntries...)
+	
+	for _, entry := range sortedEntries {
 		// Use configured time format
 		timeFormat := c.getTimeFormat()
-		startStr := info.StartTime.Format(timeFormat)
+		startStr := entry.TimeEntry.StartTime.Format(timeFormat)
 		var endStr string
-		var duration time.Duration
-		if info.IsRunning {
+		
+		if entry.TimeEntry.EndTime == nil {
 			endStr = c.getRunningStatus()
-			duration = timeNow().Sub(info.StartTime)
-		} else if info.EndTime != nil {
-			endStr = info.EndTime.Format(timeFormat)
-			duration = info.EndTime.Sub(info.StartTime)
+		} else {
+			endStr = entry.TimeEntry.EndTime.Format(timeFormat)
 		}
-		hours := int(duration.Hours())
-		minutes := int(duration.Minutes()) % 60
 		
 		// Truncate task name if configured
-		taskName := c.truncateTaskName(info.TaskName)
-		fmt.Printf("%s - %s (%dh %dm): %s\n", startStr, endStr, hours, minutes, taskName)
+		taskName := c.truncateTaskName(entry.Task.TaskName)
+		fmt.Printf("%s - %s (%s): %s\n", startStr, endStr, entry.Duration, taskName)
 	}
 
 	return nil

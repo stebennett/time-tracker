@@ -6,21 +6,18 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"time-tracker/internal/api"
 	"time-tracker/internal/config"
 )
 
 // RootCommand represents the base command when called without any subcommands
 type RootCommand struct {
 	cmd    *cobra.Command
-	api    api.API
 	config *config.Config
 }
 
 // NewRootCommand creates the root cobra command with global flags
-func NewRootCommand(apiInstance api.API, cfg *config.Config) *RootCommand {
+func NewRootCommand(cfg *config.Config) *RootCommand {
 	root := &RootCommand{
-		api:    apiInstance,
 		config: cfg,
 	}
 
@@ -149,7 +146,12 @@ func (r *RootCommand) addSubcommands() {
 			ctx, cancel := context.WithTimeout(context.Background(), r.getAppTimeout())
 			defer cancel()
 			
-			startHandler := NewStartCommand(NewAppWithConfig(r.api, r.config))
+			// Create app with default repository to get both API instances
+		app, err := NewAppWithDefaultRepository()
+		if err != nil {
+			return fmt.Errorf("failed to initialize app: %w", err)
+		}
+		startHandler := NewStartCommand(app)
 			return startHandler.Execute(ctx, args)
 		},
 	}
@@ -164,7 +166,12 @@ func (r *RootCommand) addSubcommands() {
 			ctx, cancel := context.WithTimeout(context.Background(), r.getAppTimeout())
 			defer cancel()
 			
-			stopHandler := NewStopCommand(NewAppWithConfig(r.api, r.config))
+			// Create app with default repository to get both API instances
+		app, err := NewAppWithDefaultRepository()
+		if err != nil {
+			return fmt.Errorf("failed to initialize app: %w", err)
+		}
+		stopHandler := NewStopCommand(app)
 			return stopHandler.Execute(ctx, args)
 		},
 	}
@@ -187,7 +194,12 @@ Examples:
 			ctx, cancel := context.WithTimeout(context.Background(), r.getAppTimeout())
 			defer cancel()
 			
-			listHandler := NewListCommand(NewAppWithConfig(r.api, r.config))
+			// Create app with default repository to get both API instances
+		app, err := NewAppWithDefaultRepository()
+		if err != nil {
+			return fmt.Errorf("failed to initialize app: %w", err)
+		}
+		listHandler := NewListCommand(app)
 			return listHandler.Execute(ctx, args)
 		},
 	}
@@ -202,7 +214,12 @@ Examples:
 			ctx, cancel := context.WithTimeout(context.Background(), r.getAppTimeout())
 			defer cancel()
 			
-			currentHandler := NewCurrentCommand(NewAppWithConfig(r.api, r.config))
+			// Create app with default repository to get both API instances
+		app, err := NewAppWithDefaultRepository()
+		if err != nil {
+			return fmt.Errorf("failed to initialize app: %w", err)
+		}
+		currentHandler := NewCurrentCommand(app)
 			return currentHandler.Execute(ctx, args)
 		},
 	}
@@ -223,7 +240,12 @@ Example:
 			ctx, cancel := context.WithTimeout(context.Background(), r.getAppTimeout())
 			defer cancel()
 			
-			outputHandler := NewOutputCommand(NewAppWithConfig(r.api, r.config))
+			// Create app with default repository to get both API instances
+		app, err := NewAppWithDefaultRepository()
+		if err != nil {
+			return fmt.Errorf("failed to initialize app: %w", err)
+		}
+		outputHandler := NewOutputCommand(app)
 			return outputHandler.Execute(ctx, args)
 		},
 	}
@@ -244,7 +266,12 @@ Examples:
 			ctx, cancel := context.WithTimeout(context.Background(), r.getAppTimeout()*2)
 			defer cancel()
 			
-			resumeHandler := NewResumeCommand(NewAppWithConfig(r.api, r.config))
+			// Create app with default repository to get both API instances
+		app, err := NewAppWithDefaultRepository()
+		if err != nil {
+			return fmt.Errorf("failed to initialize app: %w", err)
+		}
+		resumeHandler := NewResumeCommand(app)
 			return resumeHandler.Execute(ctx, args)
 		},
 	}
@@ -267,7 +294,12 @@ Examples:
 			ctx, cancel := context.WithTimeout(context.Background(), r.getAppTimeout()*2)
 			defer cancel()
 			
-			summaryHandler := NewSummaryCommand(NewAppWithConfig(r.api, r.config))
+			// Create app with default repository to get both API instances
+		app, err := NewAppWithDefaultRepository()
+		if err != nil {
+			return fmt.Errorf("failed to initialize app: %w", err)
+		}
+		summaryHandler := NewSummaryCommand(app)
 			return summaryHandler.Execute(ctx, args)
 		},
 	}
@@ -286,7 +318,12 @@ which task to delete from a list of available tasks.`,
 			ctx, cancel := context.WithTimeout(context.Background(), r.getAppTimeout()*2)
 			defer cancel()
 			
-			deleteHandler := NewDeleteCommand(NewAppWithConfig(r.api, r.config))
+			// Create app with default repository to get both API instances
+		app, err := NewAppWithDefaultRepository()
+		if err != nil {
+			return fmt.Errorf("failed to initialize app: %w", err)
+		}
+		deleteHandler := NewDeleteCommand(app)
 			return deleteHandler.Execute(ctx, args)
 		},
 	}
