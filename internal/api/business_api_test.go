@@ -137,13 +137,27 @@ func setupTestBusinessAPI(t *testing.T, tasks []*domain.Task, timeEntries []*dom
 	}
 	
 	for _, entry := range timeEntries {
+		// Map TaskID: 0 to the first task, TaskID: 1 to the second task, etc.
+		actualTaskID := entry.TaskID
+		if entry.TaskID == 0 && len(tasks) > 0 {
+			actualTaskID = tasks[0].ID
+		} else if entry.TaskID == 1 && len(tasks) > 1 {
+			actualTaskID = tasks[1].ID
+		} else if entry.TaskID == 2 && len(tasks) > 2 {
+			actualTaskID = tasks[2].ID
+		} else if entry.TaskID == 3 && len(tasks) > 3 {
+			actualTaskID = tasks[3].ID
+		}
+		
 		dbEntry := &sqlite.TimeEntry{
-			TaskID:    entry.TaskID,
+			TaskID:    actualTaskID,
 			StartTime: entry.StartTime,
 			EndTime:   entry.EndTime,
 		}
 		err := repo.CreateTimeEntry(ctx, dbEntry)
 		require.NoError(t, err)
+		// Update the entry to reflect the actual task ID
+		entry.TaskID = actualTaskID
 	}
 	
 	return businessAPI

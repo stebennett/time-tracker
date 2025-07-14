@@ -31,7 +31,7 @@ func NewTaskService(repo sqlite.Repository, timeService TimeService) TaskService
 func (t *taskServiceImpl) validateAndTrimTaskName(name string) (string, error) {
 	trimmedName := strings.TrimSpace(name)
 	if err := t.taskValidator.ValidateTaskName(trimmedName); err != nil {
-		return "", err
+		return "", errors.NewValidationError("invalid task name", err)
 	}
 	return trimmedName, nil
 }
@@ -81,7 +81,7 @@ func (t *taskServiceImpl) CreateTask(ctx context.Context, name string) (*domain.
 func (t *taskServiceImpl) GetTask(ctx context.Context, id int64) (*domain.Task, error) {
 	// Validate task ID
 	if id <= 0 {
-		return nil, errors.NewValidationError("invalid task id", nil)
+		return nil, errors.NewValidationError("invalid task ID", nil)
 	}
 
 	dbTask, err := t.repo.GetTask(ctx, id)
@@ -96,6 +96,11 @@ func (t *taskServiceImpl) GetTask(ctx context.Context, id int64) (*domain.Task, 
 
 // UpdateTask updates a task's name
 func (t *taskServiceImpl) UpdateTask(ctx context.Context, id int64, name string) (*domain.Task, error) {
+	// Validate task ID
+	if id <= 0 {
+		return nil, errors.NewValidationError("invalid task ID", nil)
+	}
+
 	// Validate task name
 	trimmedName, err := t.validateAndTrimTaskName(name)
 	if err != nil {
@@ -126,6 +131,11 @@ func (t *taskServiceImpl) UpdateTask(ctx context.Context, id int64, name string)
 
 // DeleteTaskWithEntries deletes a task and all its time entries
 func (t *taskServiceImpl) DeleteTaskWithEntries(ctx context.Context, id int64) error {
+	// Validate task ID
+	if id <= 0 {
+		return errors.NewValidationError("invalid task ID", nil)
+	}
+
 	// Check if task exists
 	_, err := t.repo.GetTask(ctx, id)
 	if err != nil {
@@ -153,10 +163,16 @@ func (t *taskServiceImpl) DeleteTaskWithEntries(ctx context.Context, id int64) e
 	return t.repo.DeleteTask(ctx, id)
 }
 
-// StartNewTask creates or finds a task and starts a new time entry for it
+// StartNewTask creates or finds a task and starts a new time entry for it, stopping any running tasks
 func (t *taskServiceImpl) StartNewTask(ctx context.Context, name string) (*TaskSession, error) {
 	// Validate task name
 	trimmedName, err := t.validateAndTrimTaskName(name)
+	if err != nil {
+		return nil, err
+	}
+
+	// Stop all running tasks first
+	_, err = t.StopAllRunningTasks(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -185,10 +201,21 @@ func (t *taskServiceImpl) StartNewTask(ctx context.Context, name string) (*TaskS
 	return t.CreateTaskSession(task, timeEntry), nil
 }
 
-// ResumeTask resumes work on an existing task by creating a new time entry
+// ResumeTask resumes work on an existing task by creating a new time entry, stopping any running tasks
 func (t *taskServiceImpl) ResumeTask(ctx context.Context, id int64) (*TaskSession, error) {
+	// Validate task ID
+	if id <= 0 {
+		return nil, errors.NewValidationError("invalid task ID", nil)
+	}
+
 	// Get the task
 	task, err := t.GetTask(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	// Stop all running tasks first
+	_, err = t.StopAllRunningTasks(ctx)
 	if err != nil {
 		return nil, err
 	}
