@@ -5,7 +5,7 @@ go 1.24.4
 require (
 	github.com/spf13/cobra v1.9.1
 	github.com/stretchr/testify v1.11.1
-	modernc.org/sqlite v1.40.1
+	modernc.org/sqlite v1.41.0
 )
 
 require (
