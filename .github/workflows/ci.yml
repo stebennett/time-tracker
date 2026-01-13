@@ -48,7 +48,7 @@ jobs:
           GOARCH=${{ matrix.goarch }} go build -v -o tt ./cmd/tt/main.go
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: tt-linux-${{ matrix.goarch }}
           path: ./tt
@@ -75,7 +75,7 @@ jobs:
           GOARCH=${{ matrix.goarch }} go build -v -o tt ./cmd/tt/main.go
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: tt-darwin-${{ matrix.goarch }}
           path: ./tt
@@ -103,7 +103,7 @@ jobs:
           go build -v -o tt.exe ./cmd/tt/main.go
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: tt-windows-${{ matrix.goarch }}
           path: ./tt.exe
