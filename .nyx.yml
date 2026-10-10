@@ -1,0 +1,1 @@
+engineering_standards: {"schema_version": 1, "framework_version": "1.4", "type": "cli", "status": "maintained", "deployment_target": "none", "database": "sqlite", "lightweight": true, "optional_categories": ["DAT"], "exemptions": []}
